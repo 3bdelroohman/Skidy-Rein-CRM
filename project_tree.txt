@@ -1,0 +1,91 @@
+﻿===== PROJECT TREE =====
+[FILE] .env.example
+[FILE] .env.local
+[DIR ] .git
+[FILE] .gitignore
+[DIR ] .next
+[DIR ] .vscode
+[FILE] .vscode\settings.json
+[FILE] .\AGENTS.md
+[FILE] .\CLAUDE.md
+[FILE] .\components.json
+[FILE] .\eslint.config.mjs
+[FILE] .\next.config.ts
+[FILE] .\next-env.d.ts
+[DIR ] .\node_modules
+[FILE] .\package.json
+[FILE] .\package-lock.json
+[FILE] .\postcss.config.mjs
+[FILE] .\project_tree.txt
+[DIR ] .\public
+[FILE] .\public\file.svg
+[FILE] .\public\globe.svg
+[DIR ] .\public\images
+[FILE] .\public\next.svg
+[FILE] .\public\vercel.svg
+[FILE] .\public\window.svg
+[FILE] .\README.md
+[DIR ] .\src
+[FILE] .\src.zip
+[DIR ] .\src\app
+[DIR ] .\src\app\(auth)
+[DIR ] .\src\app\(auth)\login
+[DIR ] .\src\app\(dashboard)
+[DIR ] .\src\app\(dashboard)\follow-ups
+[FILE] .\src\app\(dashboard)\layout.tsx
+[DIR ] .\src\app\(dashboard)\leads
+[DIR ] 
+[DIR ] .\src\app\(dashboard)\leads\new
+[FILE] .\src\app\(dashboard)\page.tsx
+[DIR ] .\src\app\(dashboard)\parents
+[DIR ] 
+[DIR ] .\src\app\(dashboard)\parents\new
+[DIR ] .\src\app\(dashboard)\payments
+[DIR ] .\src\app\(dashboard)\payments\new
+[DIR ] .\src\app\(dashboard)\reports
+[DIR ] .\src\app\(dashboard)\schedule
+[DIR ] .\src\app\(dashboard)\settings
+[DIR ] .\src\app\(dashboard)\students
+[DIR ] 
+[DIR ] .\src\app\(dashboard)\students\new
+[DIR ] .\src\app\(dashboard)\teachers
+[DIR ] 
+[DIR ] .\src\app\(dashboard)\teachers\new
+[FILE] .\src\app\favicon.ico
+[FILE] .\src\app\globals.css
+[FILE] .\src\app\layout.tsx
+[FILE] .\src\app\page.tsx
+[DIR ] .\src\components
+[DIR ] .\src\components\charts
+[DIR ] .\src\components\dashboard
+[DIR ] .\src\components\follow-ups
+[DIR ] .\src\components\layout
+[DIR ] .\src\components\leads
+[DIR ] .\src\components\parents
+[DIR ] .\src\components\payments
+[DIR ] .\src\components\providers
+[FILE] .\src\components\providers\theme-provider.tsx
+[DIR ] .\src\components\reports
+[DIR ] .\src\components\schedule
+[DIR ] .\src\components\shared
+[DIR ] .\src\components\students
+[DIR ] .\src\components\teachers
+[DIR ] .\src\components\ui
+[FILE] .\src\components\ui\button.tsx
+[DIR ] .\src\config
+[FILE] .\src\config\navigation.ts
+[FILE] .\src\config\roles.ts
+[FILE] .\src\config\stages.ts
+[DIR ] .\src\hooks
+[DIR ] .\src\lib
+[DIR ] .\src\lib\supabase
+[FILE] .\src\lib\utils.ts
+[DIR ] .\src\messages
+[DIR ] .\src\services
+[DIR ] .\src\stores
+[FILE] .\src\stores\ui-store.ts
+[DIR ] .\src\types
+[FILE] .\src\types\common.types.ts
+[DIR ] .\supabase
+[DIR ] .\supabase\migrations
+[FILE] .\tsconfig.json
