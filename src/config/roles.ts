@@ -1,4 +1,4 @@
-import { type UserRole } from "./navigation";
+import { type UserRole } from "@/types/common.types";
 
 /**
  * Role-based access control configuration

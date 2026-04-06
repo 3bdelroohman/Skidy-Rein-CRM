@@ -5,8 +5,15 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Mail, Lock, LogIn, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
-import { createClient } from "@/lib/supabase/client";
+import { createBrowserClient } from "@supabase/ssr";
 import { cn } from "@/lib/utils";
+
+function getSupabase() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -20,7 +27,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const supabase = createClient();
+      const supabase = getSupabase();
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -52,7 +59,6 @@ export default function LoginPage() {
       transition={{ duration: 0.5 }}
       className="w-full max-w-md"
     >
-      {/* Logo */}
       <div className="text-center mb-8">
         <div
           className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-brand-lg"
@@ -60,18 +66,14 @@ export default function LoginPage() {
         >
           <span className="text-white font-bold text-2xl">SR</span>
         </div>
-        <h1 className="text-2xl font-bold text-foreground">
-          Skidy Rein
-        </h1>
+        <h1 className="text-2xl font-bold text-foreground">Skidy Rein</h1>
         <p className="text-muted-foreground text-sm mt-1">
           تسجيل الدخول للوحة التحكم
         </p>
       </div>
 
-      {/* Login Card */}
       <div className="bg-card rounded-2xl border border-border p-6 shadow-brand-md">
         <form onSubmit={handleLogin} className="space-y-4">
-          {/* Email */}
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">
               البريد الإلكتروني
@@ -98,7 +100,6 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Password */}
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">
               كلمة المرور
@@ -132,7 +133,6 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Submit */}
           <button
             type="submit"
             disabled={loading}
@@ -156,7 +156,6 @@ export default function LoginPage() {
         </form>
       </div>
 
-      {/* Footer */}
       <p className="text-center text-muted-foreground text-xs mt-6">
         Skidy Rein CRM &copy; {new Date().getFullYear()}
       </p>

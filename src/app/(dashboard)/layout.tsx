@@ -1,14 +1,13 @@
+import { requireAuth } from "@/lib/auth";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 
-/**
- * Dashboard Layout
- * Wraps all dashboard pages with sidebar + navbar
- * @author Abdelrahman
- */
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // سيعمل redirect لـ /login لو مفيش user
+  await requireAuth();
+
   return <DashboardShell>{children}</DashboardShell>;
 }
