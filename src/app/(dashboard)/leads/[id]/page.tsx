@@ -2,6 +2,7 @@
 
 import { use } from "react";
 import { useRouter } from "next/navigation";
+import type { LeadStage } from "@/types/common.types";
 import {
   ArrowRight,
   User,
@@ -18,7 +19,7 @@ import { TemperatureBadge } from "@/components/leads/temperature-badge";
 import { STAGE_CONFIGS } from "@/config/stages";
 
 // Valid next stages for each stage
-const NEXT_STAGES: Partial<Record<string, string[]>> = {
+const NEXT_STAGES: Partial<Record<LeadStage, LeadStage[]>> = {
   new: ["qualified", "lost"],
   qualified: ["trial_proposed", "lost"],
   trial_proposed: ["trial_booked", "lost"],
@@ -85,7 +86,7 @@ export default function LeadDetailsPage({
   }
 
   const currentStageConfig = STAGE_CONFIGS[lead.stage];
-  const nextStages = (NEXT_STAGES[lead.stage] || []) as string[];
+  const nextStages = NEXT_STAGES[lead.stage] ?? [];
 
   return (
     <div className="space-y-6">
@@ -140,7 +141,7 @@ export default function LeadDetailsPage({
                     <div
                       className={cn(
                         "shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all",
-                        isActive && "ring-2 ring-offset-2 scale-110",
+                        isActive && "ring-offset-2 scale-110",
                         isPast && "opacity-60"
                       )}
                       style={{
