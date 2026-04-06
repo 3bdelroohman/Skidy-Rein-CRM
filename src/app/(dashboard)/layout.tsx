@@ -1,13 +1,17 @@
 import { requireAuth } from "@/lib/auth";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
+import { UserProvider } from "@/providers/user-provider";
 
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // سيعمل redirect لـ /login لو مفيش user
-  await requireAuth();
+  const user = await requireAuth();
 
-  return <DashboardShell>{children}</DashboardShell>;
+  return (
+    <UserProvider user={user}>
+      <DashboardShell>{children}</DashboardShell>
+    </UserProvider>
+  );
 }

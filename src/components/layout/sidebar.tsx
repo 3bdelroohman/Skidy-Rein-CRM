@@ -2,23 +2,15 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
+import { useTransition } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  ChevronLeft,
-  ChevronRight,
-  LogOut,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, LogOut, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui-store";
-import { navigationGroups, type UserRole } from "@/config/navigation";
-
-// ── Temporary: حتى نربط Auth ──
-const CURRENT_USER = {
-  name: "Abdelrahman",
-  nameAr: "عبدالرحمن",
-  role: "admin" as UserRole,
-  initial: "A",
-};
+import { useCurrentUser } from "@/providers/user-provider";
+import { signOutAction } from "@/lib/actions/auth.actions";
+import { navigationGroups } from "@/config/navigation";
+import { ROLE_PERMISSIONS } from "@/config/roles";
 
 // ── Animation variants ──
 const sidebarVariants = {
@@ -36,13 +28,22 @@ export function Sidebar() {
   const { sidebarOpen, toggleSidebar, locale } = useUIStore();
   const isAr = locale === "ar";
 
+  // ── Real user from context ──
+  const user = useCurrentUser();
+  const [isLoggingOut, startTransition] = useTransition();
+
+  // ── Derived user display ──
+  const displayName = isAr ? user.fullNameAr : user.fullName;
+  const initial = user.fullName.charAt(0).toUpperCase();
+  const roleLabel = isAr
+    ? ROLE_PERMISSIONS[user.role].labelAr
+    : ROLE_PERMISSIONS[user.role].labelEn;
+
   // ── Filter nav items by role ──
   const filteredGroups = navigationGroups
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) =>
-        item.roles.includes(CURRENT_USER.role)
-      ),
+      items: group.items.filter((item) => item.roles.includes(user.role)),
     }))
     .filter((group) => group.items.length > 0);
 
@@ -50,6 +51,13 @@ export function Sidebar() {
   const isActive = (href: string): boolean => {
     if (href === "/") return pathname === "/";
     return pathname.startsWith(href);
+  };
+
+  // ── Logout handler ──
+  const handleLogout = () => {
+    startTransition(() => {
+      signOutAction();
+    });
   };
 
   return (
@@ -123,7 +131,9 @@ export function Sidebar() {
                     className={cn(
                       "flex items-center gap-3 rounded-xl transition-all duration-200",
                       "text-sm group relative",
-                      sidebarOpen ? "px-3 py-2.5" : "justify-center py-2.5 px-0",
+                      sidebarOpen
+                        ? "px-3 py-2.5"
+                        : "justify-center py-2.5 px-0",
                       active
                         ? "bg-brand-700 text-white shadow-lg shadow-brand-700/30"
                         : "text-white/60 hover:bg-white/8 hover:text-white"
@@ -132,7 +142,9 @@ export function Sidebar() {
                     <Icon
                       className={cn(
                         "shrink-0 transition-colors",
-                        active ? "text-cream-200" : "text-white/50 group-hover:text-white"
+                        active
+                          ? "text-cream-200"
+                          : "text-white/50 group-hover:text-white"
                       )}
                       size={20}
                     />
@@ -226,9 +238,7 @@ export function Sidebar() {
             className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
             style={{ background: "#4338CA" }}
           >
-            <span className="text-white text-xs font-bold">
-              {CURRENT_USER.initial}
-            </span>
+            <span className="text-white text-xs font-bold">{initial}</span>
           </div>
 
           <AnimatePresence>
@@ -241,18 +251,28 @@ export function Sidebar() {
                 className="flex-1 min-w-0"
               >
                 <p className="text-white text-xs font-semibold truncate">
-                  {isAr ? CURRENT_USER.nameAr : CURRENT_USER.name}
+                  {displayName}
                 </p>
-                <p className="text-white/40 text-[10px]">
-                  {isAr ? "مدير النظام" : "Admin"}
-                </p>
+                <p className="text-white/40 text-[10px]">{roleLabel}</p>
               </motion.div>
             )}
           </AnimatePresence>
 
           {sidebarOpen && (
-            <button className="text-white/30 hover:text-white transition-colors">
-              <LogOut size={16} />
+            <button
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              className={cn(
+                "text-white/30 hover:text-red-400 transition-colors",
+                isLoggingOut && "opacity-50 cursor-not-allowed"
+              )}
+              title={isAr ? "تسجيل الخروج" : "Sign Out"}
+            >
+              {isLoggingOut ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <LogOut size={16} />
+              )}
             </button>
           )}
         </div>
