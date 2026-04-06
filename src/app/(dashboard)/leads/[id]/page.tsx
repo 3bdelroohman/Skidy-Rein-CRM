@@ -148,7 +148,9 @@ export default function LeadDetailsPage({
                           ? stage.color
                           : stage.bgColor,
                         color: isActive ? "white" : stage.textColor,
-                        ringColor: isActive ? stage.color : "transparent",
+                        boxShadow: isActive
+                          ? `0 0 0 2px white, 0 0 0 4px ${stage.color}`
+                          : "none",
                       }}
                     >
                       {stage.labelAr}
