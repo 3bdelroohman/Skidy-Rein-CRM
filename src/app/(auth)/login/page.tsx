@@ -43,7 +43,7 @@ export default function LoginPage() {
       }
 
       toast.success("تم تسجيل الدخول بنجاح");
-      router.push("/");
+      router.replace("/leads");
       router.refresh();
     } catch {
       toast.error("حدث خطأ غير متوقع");

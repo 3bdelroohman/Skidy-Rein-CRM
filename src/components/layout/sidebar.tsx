@@ -1,14 +1,14 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import Link from "next/link";
-import { useTransition } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronLeft, ChevronRight, LogOut, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui-store";
 import { useCurrentUser } from "@/providers/user-provider";
-import { signOutAction } from "@/lib/actions/auth.actions";
+import { signOutClient } from "@/lib/actions/auth.actions";
 import { navigationGroups } from "@/config/navigation";
 import { ROLE_PERMISSIONS } from "@/config/roles";
 
@@ -30,7 +30,7 @@ export function Sidebar() {
 
   // ── Real user from context ──
   const user = useCurrentUser();
-  const [isLoggingOut, startTransition] = useTransition();
+    const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // ── Derived user display ──
   const displayName = isAr ? user.fullNameAr : user.fullName;
@@ -54,10 +54,9 @@ export function Sidebar() {
   };
 
   // ── Logout handler ──
-  const handleLogout = () => {
-    startTransition(() => {
-      signOutAction();
-    });
+    const handleLogout = async () => {
+    setIsLoggingOut(true);
+    await signOutClient();
   };
 
   return (
@@ -268,8 +267,8 @@ export function Sidebar() {
               )}
               title={isAr ? "تسجيل الخروج" : "Sign Out"}
             >
-              {isLoggingOut ? (
-                <Loader2 size={16} className="animate-spin" />
+                            {isLoggingOut ? (
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (
                 <LogOut size={16} />
               )}
