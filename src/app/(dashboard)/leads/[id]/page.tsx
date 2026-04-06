@@ -4,26 +4,21 @@ import { use } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
-  Phone,
   User,
   Baby,
-  GraduationCap,
-  Calendar,
   Clock,
   MessageSquare,
   Edit,
   ChevronLeft,
-  ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MOCK_LEADS } from "@/lib/mock-data";
 import { StageBadge } from "@/components/leads/stage-badge";
 import { TemperatureBadge } from "@/components/leads/temperature-badge";
 import { STAGE_CONFIGS } from "@/config/stages";
-import type { LeadStage } from "@/types/common.types";
 
 // Valid next stages for each stage
-const NEXT_STAGES: Record<LeadStage, LeadStage[]> = {
+const NEXT_STAGES: Partial<Record<string, string[]>> = {
   new: ["qualified", "lost"],
   qualified: ["trial_proposed", "lost"],
   trial_proposed: ["trial_booked", "lost"],
@@ -90,7 +85,7 @@ export default function LeadDetailsPage({
   }
 
   const currentStageConfig = STAGE_CONFIGS[lead.stage];
-  const nextStages = NEXT_STAGES[lead.stage];
+  const nextStages = (NEXT_STAGES[lead.stage] || []) as string[];
 
   return (
     <div className="space-y-6">
