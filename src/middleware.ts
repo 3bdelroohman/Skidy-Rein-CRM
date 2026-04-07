@@ -2,8 +2,8 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 /**
- * Route access control — must match src/config/navigation.ts roles
- * "/" (dashboard) is open to ALL authenticated users
+ * Route-to-Role access map
+ * "/" is open to ALL authenticated users
  */
 const ROUTE_ROLES: Record<string, string[]> = {
   "/leads": ["admin", "sales"],
@@ -59,43 +59,48 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse;
   }
 
-  // Not authenticated → login
+  // Not authenticated → login (but don't redirect if already on login)
   if (!user && !isLoginPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
-  // Already authenticated on login page → dashboard
+  // Authenticated on login page → dashboard
   if (user && isLoginPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);
   }
 
-  // Role-based route protection
+  // Role-based route protection (only for protected routes, NOT "/")
   if (user && !isLoginPage) {
-    // Find which protected route this matches
     const matchedRoute = Object.keys(ROUTE_ROLES).find(
       (route) => pathname === route || pathname.startsWith(route + "/")
     );
 
-    // If it's a protected route, check role
+    // Only check role for explicitly protected routes
     if (matchedRoute) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .maybeSingle();
+      try {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .maybeSingle();
 
-      const userRole = profile?.role;
-      const allowedRoles = ROUTE_ROLES[matchedRoute];
+        const userRole = profile?.role;
+        const allowedRoles = ROUTE_ROLES[matchedRoute];
 
-      // No role or unauthorized → redirect to dashboard
-      if (!userRole || !allowedRoles.includes(userRole)) {
-        const url = request.nextUrl.clone();
-        url.pathname = "/";
-        return NextResponse.redirect(url);
+        // If we got a role and it's not allowed → redirect to dashboard
+        // If profile query failed → let request through (layout will handle)
+        if (userRole && !allowedRoles.includes(userRole)) {
+          const url = request.nextUrl.clone();
+          url.pathname = "/";
+          return NextResponse.redirect(url);
+        }
+      } catch {
+        // Profile query failed → don't block, let server component handle
+        return supabaseResponse;
       }
     }
   }

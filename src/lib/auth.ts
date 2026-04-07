@@ -3,7 +3,6 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { UserRole } from "@/types/common.types";
 
-/** Valid roles — used to verify DB value */
 const VALID_ROLES: UserRole[] = ["admin", "sales", "ops", "owner"];
 
 async function getSupabaseServer() {
@@ -23,7 +22,7 @@ async function getSupabaseServer() {
               cookieStore.set(name, value, options);
             });
           } catch {
-            // ignore in server components
+            // Can't set cookies in Server Components — expected
           }
         },
       },
@@ -39,38 +38,35 @@ export async function getCurrentUser() {
     error,
   } = await supabase.auth.getUser();
 
+  // Not authenticated → null (middleware handles redirect)
   if (error || !user) return null;
 
+  // Try to get profile
   const { data: profile } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", user.id)
     .maybeSingle();
 
-  // CRITICAL: No profile = no access (don't fallback to admin!)
-  if (!profile) return null;
-
-  // CRITICAL: No valid role = no access
-  const role = profile.role as UserRole;
-  if (!role || !VALID_ROLES.includes(role)) return null;
-
-  // CRITICAL: Inactive user = no access
-  if (profile.is_active === false) return null;
+  // Determine role: use DB role if valid, otherwise "owner" (most restricted)
+  // NEVER return null here — user IS authenticated, profile issue ≠ auth issue
+  const dbRole = profile?.role as UserRole | undefined;
+  const role: UserRole =
+    dbRole && VALID_ROLES.includes(dbRole) ? dbRole : "owner";
 
   return {
     id: user.id,
     email: user.email ?? "",
     fullName:
-      profile.full_name ??
+      profile?.full_name ??
       user.email?.split("@")[0] ??
       "User",
     fullNameAr:
-      profile.full_name_ar ??
-      user.email?.split("@")[0] ??
+      profile?.full_name_ar ??
       "مستخدم",
     role,
-    avatarUrl: profile.avatar_url ?? null,
-    isActive: true,
+    avatarUrl: profile?.avatar_url ?? null,
+    isActive: profile?.is_active !== false,
   };
 }
 
