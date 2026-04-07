@@ -1,26 +1,37 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
-import { X } from "lucide-react";
+import { X, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui-store";
-import { navigationGroups, type UserRole } from "@/config/navigation";
-
-const CURRENT_USER_ROLE: UserRole = "admin";
+import { useCurrentUser } from "@/providers/user-provider";
+import { signOutClient } from "@/lib/actions/auth.actions";
+import { navigationGroups } from "@/config/navigation";
+import { ROLE_PERMISSIONS } from "@/config/roles";
 
 export function MobileNav() {
   const pathname = usePathname();
   const { mobileSidebarOpen, setMobileSidebarOpen, locale } = useUIStore();
   const isAr = locale === "ar";
 
+  // Real user — not hardcoded!
+  const user = useCurrentUser();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const displayName = isAr ? user.fullNameAr : user.fullName;
+  const initial = user.fullName.charAt(0).toUpperCase();
+  const roleLabel = isAr
+    ? ROLE_PERMISSIONS[user.role].labelAr
+    : ROLE_PERMISSIONS[user.role].labelEn;
+
+  // Filter nav by REAL user role
   const filteredGroups = navigationGroups
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) =>
-        item.roles.includes(CURRENT_USER_ROLE)
-      ),
+      items: group.items.filter((item) => item.roles.includes(user.role)),
     }))
     .filter((group) => group.items.length > 0);
 
@@ -30,6 +41,11 @@ export function MobileNav() {
   };
 
   const handleClose = () => setMobileSidebarOpen(false);
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    await signOutClient();
+  };
 
   return (
     <AnimatePresence>
@@ -111,14 +127,10 @@ export function MobileNav() {
                           <Icon
                             size={20}
                             className={cn(
-                              active
-                                ? "text-cream-200"
-                                : "text-white/50"
+                              active ? "text-cream-200" : "text-white/50"
                             )}
                           />
-                          <span>
-                            {isAr ? item.titleAr : item.titleEn}
-                          </span>
+                          <span>{isAr ? item.titleAr : item.titleEn}</span>
 
                           {item.badge && item.badge > 0 && (
                             <span className="mr-auto bg-danger-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5">
@@ -132,6 +144,43 @@ export function MobileNav() {
                 </div>
               ))}
             </nav>
+
+            {/* User Info + Logout */}
+            <div className="border-t border-white/10 p-3">
+              <div className="flex items-center gap-3 rounded-xl p-2 bg-white/5">
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                  style={{ background: "#4338CA" }}
+                >
+                  <span className="text-white text-xs font-bold">
+                    {initial}
+                  </span>
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <p className="text-white text-xs font-semibold truncate">
+                    {displayName}
+                  </p>
+                  <p className="text-white/40 text-[10px]">{roleLabel}</p>
+                </div>
+
+                <button
+                  onClick={handleLogout}
+                  disabled={isLoggingOut}
+                  className={cn(
+                    "text-white/30 hover:text-red-400 transition-colors",
+                    isLoggingOut && "opacity-50 cursor-not-allowed"
+                  )}
+                  title={isAr ? "تسجيل الخروج" : "Sign Out"}
+                >
+                  {isLoggingOut ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <LogOut size={16} />
+                  )}
+                </button>
+              </div>
+            </div>
           </motion.div>
         </>
       )}

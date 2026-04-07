@@ -43,7 +43,8 @@ export default function LoginPage() {
       }
 
       toast.success("تم تسجيل الدخول بنجاح");
-      router.replace("/leads");
+      // Dashboard — all roles have access to "/"
+      router.replace("/");
       router.refresh();
     } catch {
       toast.error("حدث خطأ غير متوقع");

@@ -3,6 +3,9 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { UserRole } from "@/types/common.types";
 
+/** Valid roles — used to verify DB value */
+const VALID_ROLES: UserRole[] = ["admin", "sales", "ops", "owner"];
+
 async function getSupabaseServer() {
   const cookieStore = await cookies();
 
@@ -38,29 +41,36 @@ export async function getCurrentUser() {
 
   if (error || !user) return null;
 
-  // profile اختياري مؤقتًا
   const { data: profile } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", user.id)
     .maybeSingle();
 
+  // CRITICAL: No profile = no access (don't fallback to admin!)
+  if (!profile) return null;
+
+  // CRITICAL: No valid role = no access
+  const role = profile.role as UserRole;
+  if (!role || !VALID_ROLES.includes(role)) return null;
+
+  // CRITICAL: Inactive user = no access
+  if (profile.is_active === false) return null;
+
   return {
     id: user.id,
     email: user.email ?? "",
     fullName:
-      profile?.full_name ??
-      user.user_metadata?.full_name ??
+      profile.full_name ??
       user.email?.split("@")[0] ??
       "User",
     fullNameAr:
-      profile?.full_name_ar ??
-      user.user_metadata?.full_name_ar ??
+      profile.full_name_ar ??
       user.email?.split("@")[0] ??
       "مستخدم",
-    role: (profile?.role ?? "admin") as UserRole,
-    avatarUrl: profile?.avatar_url ?? null,
-    isActive: profile?.is_active ?? true,
+    role,
+    avatarUrl: profile.avatar_url ?? null,
+    isActive: true,
   };
 }
 
@@ -72,6 +82,6 @@ export async function requireAuth() {
 
 export async function requireRole(roles: UserRole[]) {
   const user = await requireAuth();
-  if (!roles.includes(user.role)) redirect("/leads");
+  if (!roles.includes(user.role)) redirect("/");
   return user;
 }

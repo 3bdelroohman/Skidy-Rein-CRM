@@ -11,10 +11,11 @@ import {
   Settings,
   type LucideIcon,
 } from "lucide-react";
+import type { UserRole } from "@/types/common.types";
 
 /**
  * Sidebar navigation configuration
- * Defines all dashboard routes with icons and access control
+ * Single source of truth for routes + role access
  * @author Abdelrahman
  */
 
@@ -32,8 +33,6 @@ export interface NavigationGroup {
   labelEn: string;
   items: NavigationItem[];
 }
-
-export type UserRole = "admin" | "sales" | "ops" | "owner";
 
 export const navigationGroups: NavigationGroup[] = [
   {

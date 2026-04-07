@@ -1,6 +1,22 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+/**
+ * Route access control — must match src/config/navigation.ts roles
+ * "/" (dashboard) is open to ALL authenticated users
+ */
+const ROUTE_ROLES: Record<string, string[]> = {
+  "/leads": ["admin", "sales"],
+  "/follow-ups": ["admin", "sales"],
+  "/students": ["admin", "ops", "owner"],
+  "/parents": ["admin", "ops"],
+  "/teachers": ["admin", "ops", "owner"],
+  "/schedule": ["admin", "ops", "owner"],
+  "/payments": ["admin", "sales", "owner"],
+  "/reports": ["admin", "owner"],
+  "/settings": ["admin"],
+};
+
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
@@ -38,20 +54,50 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/favicon") ||
     /\.[a-zA-Z0-9]+$/.test(pathname);
 
+  // Skip static assets
   if (isPublicAsset) {
     return supabaseResponse;
   }
 
+  // Not authenticated → login
   if (!user && !isLoginPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
+  // Already authenticated on login page → dashboard
   if (user && isLoginPage) {
     const url = request.nextUrl.clone();
-    url.pathname = "/leads";
+    url.pathname = "/";
     return NextResponse.redirect(url);
+  }
+
+  // Role-based route protection
+  if (user && !isLoginPage) {
+    // Find which protected route this matches
+    const matchedRoute = Object.keys(ROUTE_ROLES).find(
+      (route) => pathname === route || pathname.startsWith(route + "/")
+    );
+
+    // If it's a protected route, check role
+    if (matchedRoute) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      const userRole = profile?.role;
+      const allowedRoles = ROUTE_ROLES[matchedRoute];
+
+      // No role or unauthorized → redirect to dashboard
+      if (!userRole || !allowedRoles.includes(userRole)) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/";
+        return NextResponse.redirect(url);
+      }
+    }
   }
 
   return supabaseResponse;
