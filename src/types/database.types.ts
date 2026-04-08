@@ -36,6 +36,7 @@ export interface Database {
           id: string;
         };
         Update: Partial<Database["public"]["Tables"]["profiles"]["Row"]>;
+        Relationships: [];
       };
       leads: {
         Row: {
@@ -61,6 +62,7 @@ export interface Database {
           id?: string;
         };
         Update: Partial<Database["public"]["Tables"]["leads"]["Row"]>;
+        Relationships: [];
       };
       follow_ups: {
         Row: {
@@ -82,6 +84,7 @@ export interface Database {
           id?: string;
         };
         Update: Partial<Database["public"]["Tables"]["follow_ups"]["Row"]>;
+        Relationships: [];
       };
       lead_activities: {
         Row: {
@@ -96,6 +99,7 @@ export interface Database {
           id?: string;
         };
         Update: Partial<Database["public"]["Tables"]["lead_activities"]["Row"]>;
+        Relationships: [];
       };
       students: {
         Row: {
@@ -116,6 +120,7 @@ export interface Database {
           id?: string;
         };
         Update: Partial<Database["public"]["Tables"]["students"]["Row"]>;
+        Relationships: [];
       };
       parents: {
         Row: {
@@ -132,6 +137,7 @@ export interface Database {
           id?: string;
         };
         Update: Partial<Database["public"]["Tables"]["parents"]["Row"]>;
+        Relationships: [];
       };
       payments: {
         Row: {
@@ -147,6 +153,7 @@ export interface Database {
           id?: string;
         };
         Update: Partial<Database["public"]["Tables"]["payments"]["Row"]>;
+        Relationships: [];
       };
     };
     Views: Record<string, never>;

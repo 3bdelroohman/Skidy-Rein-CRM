@@ -139,14 +139,14 @@ export default function LeadDetailsPage({ params }: { params: Promise<{ id: stri
                         <div
                           className={cn(
                             "inline-flex min-h-11 items-center justify-center rounded-full border px-4 text-xs font-semibold whitespace-nowrap transition-all",
-                            isActive && "shadow-sm ring-2 ring-offset-1 ring-offset-background",
+                            isActive && "shadow-sm",
                             isPast && !isActive && "opacity-80",
                           )}
                           style={{
                             backgroundColor: isActive ? stage.color : stage.bgColor,
                             color: isActive ? "#ffffff" : stage.textColor,
                             borderColor: isActive ? stage.color : `${stage.color}33`,
-                            ringColor: `${stage.color}22`
+                            boxShadow: isActive ? `0 0 0 3px ${stage.color}22` : undefined
                           }}
                         >
                           {getStageLabel(stage.key, locale)}
