@@ -6,7 +6,7 @@ import { listLeads } from "@/services/leads.service";
 import { getPaymentsSummary } from "@/services/payments.service";
 import { getScheduleOverview } from "@/services/schedule.service";
 import { listStudents } from "@/services/students.service";
-import type { ReportsData } from "@/types/crm";
+import type { ReportsData, ReportsSummaryItem } from "@/types/crm";
 import type { LeadStage, Locale, LossReason } from "@/types/common.types";
 
 const LOSS_REASON_ORDER: LossReason[] = [
@@ -106,7 +106,7 @@ export async function getReportsData(locale: Locale = "ar"): Promise<ReportsData
     .filter((item) => item.days > 0)
     .sort((a, b) => b.days - a.days);
 
-  const operationalSummary = [
+  const operationalSummary: ReportsSummaryItem[] = [
     {
       title: t(locale, "متابعات متأخرة", "Overdue follow-ups"),
       value: overdueFollowUps.toLocaleString(locale === "ar" ? "ar-EG" : "en-US"),
