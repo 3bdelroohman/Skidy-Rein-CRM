@@ -217,13 +217,6 @@ export default function SettingsPage() {
             <div className="space-y-4">
               <div className="rounded-2xl border border-border bg-background p-4">
                 <p className="text-sm font-semibold text-foreground">{t(locale, "تغيير كلمة المرور", "Change password")}</p>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  {t(
-                    locale,
-                    "حدّث كلمة المرور من داخل النظام مباشرة. هذا التغيير يُحفَظ في Supabase على الحساب الحالي وليس داخل المتصفح فقط.",
-                    "Update your password directly inside the CRM. This change is saved to the current Supabase account, not just this browser.",
-                  )}
-                </p>
               </div>
 
               <div className="grid grid-cols-1 gap-4">
