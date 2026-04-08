@@ -1,6 +1,8 @@
+
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
@@ -21,24 +23,10 @@ import { useUIStore } from "@/stores/ui-store";
 import { useCurrentUser } from "@/providers/user-provider";
 import { navigationGroups } from "@/config/navigation";
 import { GlobalSearch } from "@/components/layout/global-search";
+import { getActionCenterData } from "@/services/operations.service";
+import type { AppNotificationItem } from "@/types/crm";
 
-interface Notification {
-  id: string;
-  titleAr: string;
-  titleEn: string;
-  timeAr: string;
-  timeEn: string;
-  read: boolean;
-  type: "warning" | "info" | "success";
-}
-
-const INITIAL_NOTIFICATIONS: Notification[] = [
-  { id: "1", titleAr: "3 عملاء جدد ما تم الرد عليهم", titleEn: "3 new leads still need a response", timeAr: "منذ ساعتين", timeEn: "2 hours ago", read: false, type: "warning" },
-  { id: "2", titleAr: "سارة محمد — غابت 3 حصص متتالية", titleEn: "Sara Mohamed missed 3 classes in a row", timeAr: "منذ 3 ساعات", timeEn: "3 hours ago", read: false, type: "warning" },
-  { id: "3", titleAr: "دفعتان متأخرتان لأكثر من أسبوع", titleEn: "2 payments are overdue for more than a week", timeAr: "منذ 5 ساعات", timeEn: "5 hours ago", read: false, type: "warning" },
-  { id: "4", titleAr: "5 متابعات مجدولة لليوم", titleEn: "5 follow-ups are scheduled for today", timeAr: "اليوم", timeEn: "Today", read: true, type: "info" },
-  { id: "5", titleAr: "تم تسجيل طالب جديد بنجاح", titleEn: "A new student was enrolled successfully", timeAr: "أمس", timeEn: "Yesterday", read: true, type: "success" },
-];
+type Notification = AppNotificationItem & { read: boolean };
 
 function usePageTitle(): { ar: string; en: string } {
   const pathname = usePathname();
@@ -51,16 +39,44 @@ function usePageTitle(): { ar: string; en: string } {
   return { ar: "لوحة التحكم", en: "Dashboard" };
 }
 
+function mapNotifications(items: AppNotificationItem[]): Notification[] {
+  return items.map((item) => ({
+    ...item,
+    read: item.readDefault ?? false,
+  }));
+}
+
 export function TopNavbar() {
   const { theme, setTheme } = useTheme();
   const { locale, setLocale, toggleMobileSidebar } = useUIStore();
   const pageTitle = usePageTitle();
   const isAr = locale === "ar";
   const user = useCurrentUser();
-  const [notifications, setNotifications] = useState<Notification[]>(INITIAL_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadNotifications() {
+      const data = await getActionCenterData(
+        {
+          role: user.role,
+          fullName: user.fullName,
+          fullNameAr: user.fullNameAr,
+        },
+        locale,
+      );
+      if (isMounted) {
+        setNotifications(mapNotifications(data.notifications));
+      }
+    }
+    void loadNotifications();
+    return () => {
+      isMounted = false;
+    };
+  }, [locale, user.fullName, user.fullNameAr, user.role]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -85,14 +101,7 @@ export function TopNavbar() {
 
   const markAllAsRead = () => setNotifications((prev) => prev.map((item) => ({ ...item, read: true })));
   const markAsRead = (id: string) => setNotifications((prev) => prev.map((item) => (item.id === id ? { ...item, read: true } : item)));
-
-  const visibleNotifications = notifications.filter((item) => {
-    if (user.role === "sales") return ["1", "3", "4"].includes(item.id);
-    if (user.role === "ops") return ["2", "4", "5"].includes(item.id);
-    return true;
-  });
-
-  const visibleUnreadCount = visibleNotifications.filter((item) => !item.read).length;
+  const visibleUnreadCount = notifications.filter((item) => !item.read).length;
 
   function typeIcon(type: Notification["type"]): LucideIcon {
     if (type === "warning") return TriangleAlert;
@@ -109,7 +118,7 @@ export function TopNavbar() {
           </button>
           <div>
             <h1 className="text-base font-bold text-foreground lg:text-lg">{isAr ? pageTitle.ar : pageTitle.en}</h1>
-            <p className="hidden text-xs text-muted-foreground sm:block">{isAr ? "Skidy Rein CRM" : "Skidy Rein CRM"}</p>
+            <p className="hidden text-xs text-muted-foreground sm:block">Skidy Rein CRM</p>
           </div>
         </div>
 
@@ -126,7 +135,13 @@ export function TopNavbar() {
             </button>
 
             {showNotifications && (
-              <div className={cn("absolute top-full mt-2 w-[320px] max-h-[400px] overflow-hidden rounded-2xl border border-border bg-card shadow-brand-lg z-50", isAr ? "left-0 lg:left-auto lg:right-0" : "right-0") }>
+              <div
+                className={cn(
+                  "absolute top-full z-50 mt-2 max-h-[420px] overflow-hidden rounded-2xl border border-border bg-card shadow-brand-lg",
+                  "w-[calc(100vw-1rem)] max-w-[380px] sm:w-[360px]",
+                  isAr ? "left-0 origin-top-left" : "right-0 origin-top-right",
+                )}
+              >
                 <div className="flex items-center justify-between border-b border-border px-4 py-3">
                   <h3 className="text-sm font-semibold text-foreground">{isAr ? "الإشعارات" : "Notifications"}</h3>
                   {visibleUnreadCount > 0 && (
@@ -137,27 +152,32 @@ export function TopNavbar() {
                   )}
                 </div>
                 <div className="max-h-[340px] overflow-y-auto">
-                  {visibleNotifications.length === 0 ? (
+                  {notifications.length === 0 ? (
                     <div className="p-6 text-center text-sm text-muted-foreground">{isAr ? "لا توجد إشعارات حالياً" : "No notifications right now"}</div>
                   ) : (
-                    visibleNotifications.map((notification) => {
+                    notifications.map((notification) => {
                       const Icon = typeIcon(notification.type);
                       return (
-                        <button key={notification.id} onClick={() => markAsRead(notification.id)} className={cn("flex w-full items-start gap-3 border-b border-border px-4 py-3 text-start transition-colors last:border-0 hover:bg-muted/50", !notification.read && "bg-brand-50/40 dark:bg-brand-950/10")}>
+                        <Link key={notification.id} href={notification.href} onClick={() => markAsRead(notification.id)} className={cn("flex w-full items-start gap-3 border-b border-border px-4 py-3 text-start transition-colors last:border-0 hover:bg-muted/50", !notification.read && "bg-brand-50/40 dark:bg-brand-950/10")}>
                           <div className={cn("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl", notification.type === "warning" && "bg-danger-50 text-danger-600 dark:bg-danger-950/20", notification.type === "success" && "bg-success-50 text-success-600 dark:bg-success-950/20", notification.type === "info" && "bg-brand-50 text-brand-600 dark:bg-brand-950/20")}>
                             <Icon size={16} />
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-start justify-between gap-2">
-                              <p className={cn("text-sm text-foreground", !notification.read && "font-semibold")}>{isAr ? notification.titleAr : notification.titleEn}</p>
+                              <p className={cn("line-clamp-2 text-sm text-foreground", !notification.read && "font-semibold")}>{notification.title}</p>
                               {!notification.read && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-brand-600" />}
                             </div>
-                            <p className="mt-1 text-[11px] text-muted-foreground">{isAr ? notification.timeAr : notification.timeEn}</p>
+                            <p className="mt-1 text-[11px] text-muted-foreground">{notification.timeLabel}</p>
                           </div>
-                        </button>
+                        </Link>
                       );
                     })
                   )}
+                </div>
+                <div className="border-t border-border p-3">
+                  <Link href="/action-center" className="block rounded-xl border border-border px-3 py-2 text-center text-sm font-medium text-foreground transition-colors hover:bg-muted">
+                    {isAr ? "فتح مركز العمليات" : "Open action center"}
+                  </Link>
                 </div>
               </div>
             )}

@@ -5,12 +5,16 @@ import {
   Bell,
   Database,
   Download,
+  Eye,
+  EyeOff,
+  KeyRound,
   Languages,
   MoonStar,
   Palette,
   RotateCcw,
   Save,
   Settings,
+  ShieldCheck,
   Trash2,
   Upload,
   User,
@@ -18,6 +22,7 @@ import {
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
 import { useUIStore } from "@/stores/ui-store";
 import { t } from "@/lib/locale";
 import {
@@ -34,8 +39,11 @@ export default function SettingsPage() {
   const { locale, setLocale, sidebarOpen, setSidebarOpen } = useUIStore();
   const [notifications, setNotifications] = useState({ email: true, whatsapp: true, browser: false });
   const [profile, setProfile] = useState({ name: "Abdelrahman", email: "admin@skidyrein.com" });
-  const [busy, setBusy] = useState<null | "save" | "reset" | "clear" | "export" | "import">(null);
+  const [passwordForm, setPasswordForm] = useState({ next: "", confirm: "" });
+  const [showPassword, setShowPassword] = useState({ next: false, confirm: false });
+  const [busy, setBusy] = useState<null | "save" | "reset" | "clear" | "export" | "import" | "password">(null);
   const backupInputRef = useRef<HTMLInputElement | null>(null);
+  const supabase = useMemo(() => createClient(), []);
 
   const previewText = useMemo(
     () => ({
@@ -50,6 +58,52 @@ export default function SettingsPage() {
   );
 
   const localDataCount = useMemo(() => getStorageEntriesByPrefix(CRM_STORAGE_PREFIX).length, []);
+
+  const passwordChecks = useMemo(() => ({
+    length: passwordForm.next.length >= 8,
+    letter: /[A-Za-z]/.test(passwordForm.next),
+    number: /\d/.test(passwordForm.next),
+    match: passwordForm.next.length > 0 && passwordForm.next === passwordForm.confirm,
+  }), [passwordForm]);
+
+  const handleChangePassword = async () => {
+    if (!passwordChecks.length || !passwordChecks.letter || !passwordChecks.number) {
+      toast.error(
+        t(
+          locale,
+          "كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل وتحتوي على حروف وأرقام.",
+          "The new password must be at least 8 characters and include letters and numbers.",
+        ),
+      );
+      return;
+    }
+
+    if (!passwordChecks.match) {
+      toast.error(t(locale, "تأكيد كلمة المرور غير مطابق.", "Password confirmation does not match."));
+      return;
+    }
+
+    try {
+      setBusy("password");
+      const { error } = await supabase.auth.updateUser({ password: passwordForm.next });
+
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+
+      setPasswordForm({ next: "", confirm: "" });
+      toast.success(
+        t(
+          locale,
+          "تم تحديث كلمة المرور بنجاح. استخدم الكلمة الجديدة في تسجيلات الدخول القادمة.",
+          "Password updated successfully. Use the new password for future sign-ins.",
+        ),
+      );
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const handleSave = async () => {
     setBusy("save");
@@ -156,6 +210,68 @@ export default function SettingsPage() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Field label={t(locale, "الاسم", "Name")} value={profile.name} onChange={(value) => setProfile((prev) => ({ ...prev, name: value }))} />
               <Field label={t(locale, "البريد", "Email")} type="email" value={profile.email} onChange={(value) => setProfile((prev) => ({ ...prev, email: value }))} />
+            </div>
+          </Card>
+
+          <Card title={t(locale, "أمان الحساب", "Account security")} icon={ShieldCheck}>
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-border bg-background p-4">
+                <p className="text-sm font-semibold text-foreground">{t(locale, "تغيير كلمة المرور", "Change password")}</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  {t(
+                    locale,
+                    "حدّث كلمة المرور من داخل النظام مباشرة. هذا التغيير يُحفَظ في Supabase على الحساب الحالي وليس داخل المتصفح فقط.",
+                    "Update your password directly inside the CRM. This change is saved to the current Supabase account, not just this browser.",
+                  )}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4">
+                <PasswordField
+                  label={t(locale, "كلمة المرور الجديدة", "New password")}
+                  value={passwordForm.next}
+                  visible={showPassword.next}
+                  onToggleVisibility={() => setShowPassword((prev) => ({ ...prev, next: !prev.next }))}
+                  onChange={(value) => setPasswordForm((prev) => ({ ...prev, next: value }))}
+                />
+                <PasswordField
+                  label={t(locale, "تأكيد كلمة المرور", "Confirm password")}
+                  value={passwordForm.confirm}
+                  visible={showPassword.confirm}
+                  onToggleVisibility={() => setShowPassword((prev) => ({ ...prev, confirm: !prev.confirm }))}
+                  onChange={(value) => setPasswordForm((prev) => ({ ...prev, confirm: value }))}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <PasswordCheck label={t(locale, "8 أحرف أو أكثر", "8 characters or more")} passed={passwordChecks.length} />
+                <PasswordCheck label={t(locale, "يحتوي على حروف", "Contains letters")} passed={passwordChecks.letter} />
+                <PasswordCheck label={t(locale, "يحتوي على أرقام", "Contains numbers")} passed={passwordChecks.number} />
+                <PasswordCheck label={t(locale, "التأكيد مطابق", "Confirmation matches")} passed={passwordChecks.match} />
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-muted/30 p-4">
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-foreground">{t(locale, "تحديث كلمة المرور للحساب الحالي", "Update password for the current account")}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t(
+                      locale,
+                      "إذا انتهت الجلسة الحالية أو انتهت صلاحيتها، قد تحتاج إلى تسجيل الدخول مرة أخرى ثم إعادة المحاولة.",
+                      "If the current session has expired, you may need to sign in again before retrying.",
+                    )}
+                  </p>
+                </div>
+                <button
+                  onClick={handleChangePassword}
+                  disabled={busy === "password"}
+                  className={cn(
+                    "inline-flex items-center gap-2 rounded-xl bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60",
+                  )}
+                >
+                  <KeyRound size={16} />
+                  {busy === "password" ? t(locale, "جارِ التحديث...", "Updating...") : t(locale, "تحديث كلمة المرور", "Update password")}
+                </button>
+              </div>
             </div>
           </Card>
 
@@ -348,6 +464,45 @@ function StaticPreview({ icon: Icon, title, description }: { icon: typeof Palett
         <p className="text-sm font-semibold text-foreground">{title}</p>
         <p className="text-xs text-muted-foreground">{description}</p>
       </div>
+    </div>
+  );
+}
+
+function PasswordField({ label, value, onChange, visible, onToggleVisibility }: { label: string; value: string; onChange: (value: string) => void; visible: boolean; onToggleVisibility: () => void }) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-sm font-medium text-foreground">{label}</label>
+      <div className="relative">
+        <input
+          type={visible ? "text" : "password"}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="w-full rounded-xl border border-input bg-muted/50 px-4 py-2.5 pe-12 text-sm text-foreground"
+        />
+        <button
+          type="button"
+          onClick={onToggleVisibility}
+          className="absolute inset-y-0 end-0 flex items-center px-3 text-muted-foreground transition-colors hover:text-foreground"
+          aria-label={visible ? "Hide password" : "Show password"}
+        >
+          {visible ? <EyeOff size={18} /> : <Eye size={18} />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PasswordCheck({ label, passed }: { label: string; passed: boolean }) {
+  return (
+    <div
+      className={cn(
+        "rounded-xl border px-3 py-2 text-sm font-medium transition-colors",
+        passed
+          ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300"
+          : "border-border bg-background text-muted-foreground",
+      )}
+    >
+      {label}
     </div>
   );
 }
