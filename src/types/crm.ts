@@ -122,6 +122,13 @@ export interface PaymentItem {
   dueDate: string;
   paidAt: string | null;
   notes?: string | null;
+  publicNote?: string | null;
+  sessionsCovered: number;
+  blockStartDate: string | null;
+  blockEndDate: string | null;
+  deferredUntil: string | null;
+  invoiceNumber: string | null;
+  invoiceIssuedAt: string | null;
 }
 
 export interface PaymentDetails extends PaymentItem {
@@ -129,6 +136,19 @@ export interface PaymentDetails extends PaymentItem {
   parent: ParentListItem | null;
   siblingPayments: PaymentItem[];
   paymentHistory: PaymentItem[];
+}
+
+export interface CreatePaymentInput {
+  studentId: string;
+  amount: number;
+  status: PaymentStatus;
+  method: PaymentMethod | null;
+  dueDate: string;
+  sessionsCovered?: number;
+  blockStartDate?: string | null;
+  blockEndDate?: string | null;
+  deferredUntil?: string | null;
+  notes?: string | null;
 }
 
 export interface ScheduleSessionItem {
@@ -286,44 +306,6 @@ export interface ReportsData {
   stageVelocity: ReportsVelocityItem[];
   operationalSummary: ReportsSummaryItem[];
   recommendations: ReportsRecommendationItem[];
-}
-
-
-export type ActionCenterItemCategory = "follow_up" | "lead" | "payment" | "student" | "schedule";
-export type ActionCenterItemPriority = "critical" | "high" | "medium" | "info";
-
-export interface ActionCenterItem {
-  id: string;
-  title: string;
-  description: string;
-  href: string;
-  category: ActionCenterItemCategory;
-  priority: ActionCenterItemPriority;
-  owner?: string;
-  meta?: string;
-}
-
-export interface ActionCenterMetric {
-  label: string;
-  value: string;
-  tone: "danger" | "warning" | "success" | "info" | "brand";
-}
-
-export interface AppNotificationItem {
-  id: string;
-  title: string;
-  timeLabel: string;
-  readDefault?: boolean;
-  href: string;
-  type: "warning" | "info" | "success";
-}
-
-export interface ActionCenterData {
-  metrics: ActionCenterMetric[];
-  critical: ActionCenterItem[];
-  mediumPriority: ActionCenterItem[];
-  informational: ActionCenterItem[];
-  notifications: AppNotificationItem[];
 }
 
 export interface CreateLeadInput {

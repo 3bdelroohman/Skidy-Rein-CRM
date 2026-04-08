@@ -139,3 +139,29 @@ export function hasPermission(
   const value = permissions[permission];
   return typeof value === "boolean" ? value : false;
 }
+
+function normalizeIdentity(value: string | null | undefined): string {
+  return (value ?? "")
+    .toLowerCase()
+    .replace(/[ـ\s\-_]+/g, "")
+    .replace(/[آأإ]/g, "ا")
+    .replace(/ة/g, "ه");
+}
+
+export function canManagePaymentsForUser(user: {
+  role: UserRole;
+  email?: string | null;
+  fullName?: string | null;
+  fullNameAr?: string | null;
+}): boolean {
+  if (user.role === "admin" || user.role === "owner") return true;
+  if (user.role !== "sales") return false;
+
+  const emailLocal = normalizeIdentity((user.email ?? "").split("@")[0]);
+  const fullName = normalizeIdentity(user.fullName);
+  const fullNameAr = normalizeIdentity(user.fullNameAr);
+
+  return [emailLocal, fullName, fullNameAr].some(
+    (value) => value.includes("alaa") || value.includes("الاء") || value.includes("آلاء") || value.includes("علاء"),
+  );
+}
