@@ -1,69 +1,105 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { BookOpen, Search, Mail, Phone } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { BookOpen, Mail, Phone, Search } from "lucide-react";
+import { useUIStore } from "@/stores/ui-store";
+import { COURSE_TYPE_LABELS, COURSE_TYPE_EN_LABELS } from "@/config/labels";
+import { getEmploymentTypeLabel, t } from "@/lib/locale";
 import { cn } from "@/lib/utils";
-import { MOCK_TEACHERS } from "@/lib/mock-data";
-
-const EMP_MAP: Record<string, string> = { full_time: "دوام كامل", part_time: "دوام جزئي", freelance: "مستقل" };
+import { listTeachers } from "@/services/teachers.service";
+import type { TeacherListItem } from "@/types/crm";
 
 export default function TeachersPage() {
+  const locale = useUIStore((state) => state.locale);
+  const isAr = locale === "ar";
   const [search, setSearch] = useState("");
+  const [teachers, setTeachers] = useState<TeacherListItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function load() {
+      setLoading(true);
+      const data = await listTeachers();
+      if (isMounted) {
+        setTeachers(data);
+        setLoading(false);
+      }
+    }
+    load();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const filtered = useMemo(() => {
-    return MOCK_TEACHERS.filter((t) => !search || t.fullName.includes(search));
-  }, [search]);
+    return teachers.filter(
+      (teacher) =>
+        !search ||
+        teacher.fullName.includes(search) ||
+        teacher.specialization.some((item) => (isAr ? COURSE_TYPE_LABELS[item] : COURSE_TYPE_EN_LABELS[item]).toLowerCase().includes(search.toLowerCase())),
+    );
+  }, [teachers, search, isAr]);
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+        <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
           <BookOpen size={28} className="text-brand-600" />
-          المدرسين
+          {t(locale, "المدرسين", "Teachers")}
         </h1>
-        <p className="text-muted-foreground text-sm mt-1">إدارة فريق المدرسين</p>
+        <p className="mt-1 text-sm text-muted-foreground">{t(locale, "إدارة فريق المدرسين والتخصصات والأعباء الحالية", "Manage teachers, specializations, and current load")}</p>
       </div>
 
       <div className="relative max-w-md">
-        <Search size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="بحث..." className={cn("w-full pr-10 pl-4 py-2.5 rounded-xl", "bg-card border border-border text-foreground placeholder:text-muted-foreground", "focus:ring-2 focus:ring-ring text-sm")} />
+        <Search size={18} className={cn("absolute top-1/2 -translate-y-1/2 text-muted-foreground", isAr ? "right-3" : "left-3")} />
+        <input type="text" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t(locale, "بحث بالاسم أو التخصص...", "Search by name or specialization...")} className={cn("w-full rounded-xl border border-border bg-card py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-ring", isAr ? "pr-10 pl-4" : "pl-10 pr-4")} />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filtered.map((t) => (
-          <div key={t.id} className="bg-card rounded-2xl border border-border p-4 hover:shadow-brand-md transition-all">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-12 h-12 rounded-xl bg-brand-700 flex items-center justify-center">
-                <span className="text-white font-bold">{t.fullName.charAt(2)}</span>
+      {loading ? (
+        <div className="rounded-2xl border border-border bg-card p-12 text-center text-muted-foreground">{t(locale, "جارِ تحميل بيانات المدرسين...", "Loading teachers...")}</div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {filtered.map((teacher) => (
+            <Link key={teacher.id} href={`/teachers/${teacher.id}`} className="rounded-2xl border border-border bg-card p-4 transition-all hover:-translate-y-0.5 hover:shadow-brand-md">
+              <div className="mb-3 flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-700">
+                  <span className="font-bold text-white">{teacher.fullName.replace("أ. ", "").charAt(0)}</span>
+                </div>
+                <div>
+                  <p className="font-bold text-foreground">{teacher.fullName}</p>
+                  <p className="text-xs text-muted-foreground">{getEmploymentTypeLabel(teacher.employment, locale)}</p>
+                </div>
+                {teacher.isActive && <span className={cn("rounded-full bg-success-50 px-2 py-0.5 text-[10px] font-semibold text-success-600", isAr ? "mr-auto" : "ml-auto")}>{t(locale, "نشط", "Active")}</span>}
               </div>
-              <div>
-                <p className="font-bold text-foreground">{t.fullName}</p>
-                <p className="text-xs text-muted-foreground">{EMP_MAP[t.employment]}</p>
+
+              <div className="mb-3 flex flex-wrap gap-1.5">
+                {teacher.specialization.map((item) => (
+                  <span key={item} className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] text-brand-700 dark:bg-brand-950 dark:text-brand-300">{isAr ? COURSE_TYPE_LABELS[item] : COURSE_TYPE_EN_LABELS[item]}</span>
+                ))}
               </div>
-              {t.isActive && <span className="mr-auto text-[10px] bg-success-50 text-success-600 px-2 py-0.5 rounded-full font-semibold">نشط</span>}
-            </div>
-            <div className="flex flex-wrap gap-1.5 mb-3">
-              {t.specialization.map((s) => (
-                <span key={s} className="text-[10px] bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full dark:bg-brand-950 dark:text-brand-300">{s}</span>
-              ))}
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-xs text-center">
-              <div className="bg-muted/50 rounded-xl p-2">
-                <p className="text-foreground font-bold text-lg">{t.classesCount}</p>
-                <p className="text-muted-foreground">كلاسات</p>
+
+              <div className="grid grid-cols-2 gap-2 text-center text-xs">
+                <div className="rounded-xl bg-muted/50 p-2">
+                  <p className="text-lg font-bold text-foreground">{teacher.classesCount}</p>
+                  <p className="text-muted-foreground">{t(locale, "كلاسات", "Classes")}</p>
+                </div>
+                <div className="rounded-xl bg-muted/50 p-2">
+                  <p className="text-lg font-bold text-foreground">{teacher.studentsCount}</p>
+                  <p className="text-muted-foreground">{t(locale, "طلاب", "Students")}</p>
+                </div>
               </div>
-              <div className="bg-muted/50 rounded-xl p-2">
-                <p className="text-foreground font-bold text-lg">{t.studentsCount}</p>
-                <p className="text-muted-foreground">طلاب</p>
+
+              <div className="mt-3 space-y-1.5 border-t border-border pt-3 text-xs text-muted-foreground">
+                <div className="flex items-center gap-2"><Phone size={14} />{teacher.phone}</div>
+                <div className="flex items-center gap-2"><Mail size={14} />{teacher.email}</div>
               </div>
-            </div>
-            <div className="mt-3 pt-3 border-t border-border space-y-1.5 text-xs text-muted-foreground">
-              <div className="flex items-center gap-2"><Phone size={14} />{t.phone}</div>
-              <div className="flex items-center gap-2"><Mail size={14} />{t.email}</div>
-            </div>
-          </div>
-        ))}
-      </div>
+            </Link>
+          ))}
+          {!loading && filtered.length === 0 && <div className="col-span-full rounded-2xl border border-dashed border-border bg-card p-12 text-center text-muted-foreground">{t(locale, "لا توجد نتائج مطابقة", "No matching results")}</div>}
+        </div>
+      )}
     </div>
   );
 }

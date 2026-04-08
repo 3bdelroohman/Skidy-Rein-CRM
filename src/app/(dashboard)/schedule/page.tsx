@@ -1,106 +1,161 @@
 "use client";
 
-import { useState } from "react";
-import { CalendarDays, ChevronRight, ChevronLeft, Clock, Users } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowLeft, ArrowRight, CalendarDays, Clock, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { listScheduleSessions, getScheduleOverview } from "@/services/schedule.service";
+import { useUIStore } from "@/stores/ui-store";
+import { getCourseLabel, getDayLabel, t } from "@/lib/locale";
+import type { ScheduleSessionItem } from "@/types/crm";
 
-const DAYS = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس"];
-
-const MOCK_SCHEDULE = [
-  { id: "1", day: 0, startTime: "16:00", endTime: "17:00", className: "Scratch A", teacher: "أ. محمود", students: 5, course: "scratch" },
-  { id: "2", day: 0, startTime: "17:30", endTime: "18:30", className: "Python A", teacher: "أ. دينا", students: 4, course: "python" },
-  { id: "3", day: 1, startTime: "16:00", endTime: "17:00", className: "Scratch B", teacher: "أ. كريم", students: 3, course: "scratch" },
-  { id: "4", day: 2, startTime: "16:00", endTime: "17:00", className: "Scratch A", teacher: "أ. محمود", students: 5, course: "scratch" },
-  { id: "5", day: 2, startTime: "17:30", endTime: "18:30", className: "Python B", teacher: "أ. دينا", students: 6, course: "python" },
-  { id: "6", day: 3, startTime: "16:00", endTime: "17:00", className: "Scratch B", teacher: "أ. كريم", students: 3, course: "scratch" },
-  { id: "7", day: 3, startTime: "18:00", endTime: "19:00", className: "Web Dev", teacher: "أ. كريم", students: 4, course: "web" },
-  { id: "8", day: 4, startTime: "16:00", endTime: "17:00", className: "Python A", teacher: "أ. دينا", students: 4, course: "python" },
-];
-
-const COURSE_COLORS: Record<string, { bg: string; border: string; text: string }> = {
-  scratch: { bg: "bg-amber-50 dark:bg-amber-950/30", border: "border-amber-300 dark:border-amber-700", text: "text-amber-700 dark:text-amber-300" },
-  python: { bg: "bg-blue-50 dark:bg-blue-950/30", border: "border-blue-300 dark:border-blue-700", text: "text-blue-700 dark:text-blue-300" },
-  web: { bg: "bg-emerald-50 dark:bg-emerald-950/30", border: "border-emerald-300 dark:border-emerald-700", text: "text-emerald-700 dark:text-emerald-300" },
-  ai: { bg: "bg-purple-50 dark:bg-purple-950/30", border: "border-purple-300 dark:border-purple-700", text: "text-purple-700 dark:text-purple-300" },
-};
+const COURSE_COLORS = {
+  scratch: { bg: "bg-brand-50", border: "border-brand-200", text: "text-brand-700" },
+  python: { bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-700" },
+  web: { bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-700" },
+  ai: { bg: "bg-purple-50", border: "border-purple-200", text: "text-purple-700" },
+} as const;
 
 export default function SchedulePage() {
-  const [currentWeek, setCurrentWeek] = useState("6 - 10 أبريل 2026");
+  const locale = useUIStore((state) => state.locale);
+  const isAr = locale === "ar";
+  const [sessions, setSessions] = useState<ScheduleSessionItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [overview, setOverview] = useState({
+    sessionsCount: 0,
+    totalStudents: 0,
+    uniqueTeachers: 0,
+    busiestDay: 0,
+    busiestDayCount: 0,
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    async function load() {
+      setLoading(true);
+      const [data, nextOverview] = await Promise.all([listScheduleSessions(), getScheduleOverview()]);
+      if (isMounted) {
+        setSessions(data);
+        setOverview(nextOverview);
+        setLoading(false);
+      }
+    }
+    load();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const grouped = useMemo(() => {
+    return Array.from({ length: 5 }, (_, dayIndex) => ({
+      dayIndex,
+      day: getDayLabel(dayIndex, locale),
+      items: sessions
+        .filter((session) => session.day === dayIndex)
+        .sort((a, b) => a.startTime.localeCompare(b.startTime)),
+    }));
+  }, [locale, sessions]);
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            <CalendarDays size={28} className="text-brand-600" />
-            الجدول الأسبوعي
-          </h1>
-          <p className="text-muted-foreground text-sm mt-1">جدول الحصص والكلاسات</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button className="p-2 rounded-xl hover:bg-muted transition-colors text-muted-foreground"><ChevronRight size={20} /></button>
-          <span className="text-sm font-semibold text-foreground px-3">{currentWeek}</span>
-          <button className="p-2 rounded-xl hover:bg-muted transition-colors text-muted-foreground"><ChevronLeft size={20} /></button>
-        </div>
+      <div className="rounded-3xl border border-border bg-card p-6">
+        <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
+          <CalendarDays size={28} className="text-brand-600" />
+          {t(locale, "الجدول", "Schedule")}
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {t(locale, "عرض أسبوعي للكلاسات، الأحمال، وأهم الجلسات الجارية", "Weekly view of classes, load, and ongoing sessions")}
+        </p>
       </div>
 
-      {/* Desktop Grid */}
-      <div className="hidden md:grid grid-cols-5 gap-3">
-        {DAYS.map((day, dayIndex) => (
-          <div key={day} className="space-y-2">
-            <div className="bg-muted/50 rounded-xl px-3 py-2 text-center">
-              <p className="font-bold text-foreground text-sm">{day}</p>
-            </div>
-            {MOCK_SCHEDULE.filter((s) => s.day === dayIndex).map((session) => {
-              const colors = COURSE_COLORS[session.course] || COURSE_COLORS.scratch;
-              return (
-                <div key={session.id} className={cn("rounded-xl border p-3 transition-all hover:shadow-brand-sm cursor-pointer", colors.bg, colors.border)}>
-                  <p className={cn("font-bold text-sm", colors.text)}>{session.className}</p>
-                  <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-                    <Clock size={12} />
-                    <span className="direction-ltr">{session.startTime} - {session.endTime}</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">{session.teacher}</p>
-                  <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-                    <Users size={12} />
-                    <span>{session.students} طلاب</span>
-                  </div>
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <MiniMetric label={t(locale, "عدد الجلسات", "Sessions")} value={overview.sessionsCount} />
+        <MiniMetric label={t(locale, "إجمالي المقاعد", "Total seats")} value={overview.totalStudents} />
+        <MiniMetric label={t(locale, "عدد المدرسين", "Teachers")} value={overview.uniqueTeachers} />
+        <MiniMetric label={t(locale, "أكثر يوم ازدحامًا", "Busiest day")} value={`${getDayLabel(overview.busiestDay, locale)} • ${overview.busiestDayCount}`} />
+      </div>
+
+      {loading ? (
+        <div className="rounded-2xl border border-border bg-card p-12 text-center text-muted-foreground">
+          {t(locale, "جارِ تحميل الجدول...", "Loading schedule...")}
+        </div>
+      ) : (
+        <>
+          <div className="hidden gap-4 xl:grid xl:grid-cols-5">
+            {grouped.map(({ day, items }) => (
+              <div key={day} className="rounded-2xl border border-border bg-card p-3">
+                <div className="mb-3 border-b border-border pb-3 text-center font-bold text-foreground">{day}</div>
+                <div className="space-y-2">
+                  {items.length === 0 ? (
+                    <EmptyDay label={t(locale, "لا توجد جلسات", "No sessions")} />
+                  ) : (
+                    items.map((session) => {
+                      const colors = COURSE_COLORS[session.course];
+                      return (
+                        <Link key={session.id} href={`/schedule/${session.id}`} className={cn("block rounded-xl border p-3 transition-all hover:-translate-y-0.5 hover:shadow-sm", colors.bg, colors.border)}>
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <p className={cn("text-sm font-bold", colors.text)}>{session.className}</p>
+                              <p className="mt-1 text-[11px] text-muted-foreground">{getCourseLabel(session.course, locale)}</p>
+                            </div>
+                            <span className="rounded-lg bg-white/70 px-2 py-1 text-[11px] text-muted-foreground dark:bg-black/20">{session.startTime}</span>
+                          </div>
+                          <div className="mt-3 space-y-1 text-[11px] text-muted-foreground">
+                            <div className="flex items-center gap-1.5"><Clock size={12} />{session.startTime} — {session.endTime}</div>
+                            <div className="flex items-center gap-1.5"><Users size={12} />{session.teacher} • {session.students} {t(locale, "طلاب", "students")}</div>
+                          </div>
+                        </Link>
+                      );
+                    })
+                  )}
                 </div>
-              );
-            })}
-            {MOCK_SCHEDULE.filter((s) => s.day === dayIndex).length === 0 && (
-              <div className="border-2 border-dashed border-border rounded-xl p-4 text-center text-xs text-muted-foreground">لا يوجد حصص</div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* Mobile List */}
-      <div className="md:hidden space-y-4">
-        {DAYS.map((day, dayIndex) => {
-          const daySessions = MOCK_SCHEDULE.filter((s) => s.day === dayIndex);
-          if (daySessions.length === 0) return null;
-          return (
-            <div key={day}>
-              <p className="font-bold text-foreground text-sm mb-2">{day}</p>
-              <div className="space-y-2">
-                {daySessions.map((session) => {
-                  const colors = COURSE_COLORS[session.course] || COURSE_COLORS.scratch;
-                  return (
-                    <div key={session.id} className={cn("rounded-xl border p-3 flex items-center justify-between", colors.bg, colors.border)}>
-                      <div>
-                        <p className={cn("font-bold text-sm", colors.text)}>{session.className}</p>
-                        <p className="text-xs text-muted-foreground">{session.teacher} — {session.students} طلاب</p>
-                      </div>
-                      <span className="text-xs text-muted-foreground direction-ltr">{session.startTime}</span>
-                    </div>
-                  );
-                })}
               </div>
-            </div>
-          );
-        })}
-      </div>
+            ))}
+          </div>
+
+          <div className="space-y-5 xl:hidden">
+            {grouped.map(({ day, items }) => (
+              <div key={day} className="space-y-2">
+                <p className="text-sm font-bold text-foreground">{day}</p>
+                {items.length === 0 ? (
+                  <EmptyDay label={t(locale, "لا توجد جلسات", "No sessions")} />
+                ) : (
+                  items.map((session) => {
+                    const colors = COURSE_COLORS[session.course];
+                    return (
+                      <Link key={session.id} href={`/schedule/${session.id}`} className={cn("block rounded-xl border p-3 transition-colors hover:bg-muted/20", colors.bg, colors.border)}>
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className={cn("text-sm font-bold", colors.text)}>{session.className}</p>
+                            <p className="text-xs text-muted-foreground">{session.teacher} — {session.students} {t(locale, "طلاب", "students")}</p>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <span>{session.startTime}</span>
+                            {isAr ? <ArrowLeft size={12} /> : <ArrowRight size={12} />}
+                          </div>
+                        </div>
+                      </Link>
+                    );
+                  })
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
+}
+
+function MiniMetric({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-2xl border border-border bg-card p-4">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-2 text-2xl font-bold text-foreground">{value}</p>
+    </div>
+  );
+}
+
+function EmptyDay({ label }: { label: string }) {
+  return <div className="rounded-xl border border-dashed border-border p-4 text-center text-xs text-muted-foreground">{label}</div>;
 }

@@ -2,19 +2,19 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 /**
- * Route-to-Role access map
- * "/" is open to ALL authenticated users
+ * Owner = same as Admin — full access
+ * Must match src/config/navigation.ts
  */
 const ROUTE_ROLES: Record<string, string[]> = {
-  "/leads": ["admin", "sales"],
-  "/follow-ups": ["admin", "sales"],
-  "/students": ["admin", "ops", "owner"],
-  "/parents": ["admin", "ops"],
-  "/teachers": ["admin", "ops", "owner"],
-  "/schedule": ["admin", "ops", "owner"],
-  "/payments": ["admin", "sales", "owner"],
-  "/reports": ["admin", "owner"],
-  "/settings": ["admin"],
+  "/leads":      ["admin", "owner", "sales"],
+  "/follow-ups": ["admin", "owner", "sales", "ops"],
+  "/students":   ["admin", "owner", "sales", "ops"],
+  "/parents":    ["admin", "owner", "ops"],
+  "/teachers":   ["admin", "owner", "ops"],
+  "/schedule":   ["admin", "owner", "ops"],
+  "/payments":   ["admin", "owner", "sales", "ops"],
+  "/reports":    ["admin", "owner"],
+  "/settings":   ["admin", "owner"],
 };
 
 export async function middleware(request: NextRequest) {
@@ -54,32 +54,27 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/favicon") ||
     /\.[a-zA-Z0-9]+$/.test(pathname);
 
-  // Skip static assets
   if (isPublicAsset) {
     return supabaseResponse;
   }
 
-  // Not authenticated → login (but don't redirect if already on login)
   if (!user && !isLoginPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
-  // Authenticated on login page → dashboard
   if (user && isLoginPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);
   }
 
-  // Role-based route protection (only for protected routes, NOT "/")
   if (user && !isLoginPage) {
     const matchedRoute = Object.keys(ROUTE_ROLES).find(
       (route) => pathname === route || pathname.startsWith(route + "/")
     );
 
-    // Only check role for explicitly protected routes
     if (matchedRoute) {
       try {
         const { data: profile } = await supabase
@@ -89,17 +84,13 @@ export async function middleware(request: NextRequest) {
           .maybeSingle();
 
         const userRole = profile?.role;
-        const allowedRoles = ROUTE_ROLES[matchedRoute];
 
-        // If we got a role and it's not allowed → redirect to dashboard
-        // If profile query failed → let request through (layout will handle)
-        if (userRole && !allowedRoles.includes(userRole)) {
+        if (userRole && !ROUTE_ROLES[matchedRoute].includes(userRole)) {
           const url = request.nextUrl.clone();
           url.pathname = "/";
           return NextResponse.redirect(url);
         }
       } catch {
-        // Profile query failed → don't block, let server component handle
         return supabaseResponse;
       }
     }

@@ -1,312 +1,236 @@
 "use client";
 
-import { use } from "react";
+import { use, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { LeadStage } from "@/types/common.types";
 import {
+  ArrowLeft,
   ArrowRight,
-  User,
   Baby,
   Clock,
-  MessageSquare,
   Edit,
-  ChevronLeft,
+  MessageSquare,
+  User,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { MOCK_LEADS } from "@/lib/mock-data";
+import { toast } from "sonner";
 import { StageBadge } from "@/components/leads/stage-badge";
 import { TemperatureBadge } from "@/components/leads/temperature-badge";
-import { STAGE_CONFIGS } from "@/config/stages";
+import { NEXT_STAGE_MAP, PIPELINE_STAGES, STAGE_CONFIGS } from "@/config/stages";
+import { formatCourseLabel, formatDate, formatDateTime, formatLeadSource } from "@/lib/formatters";
+import { getStageLabel, t } from "@/lib/locale";
+import { cn } from "@/lib/utils";
+import { useCurrentUser } from "@/providers/user-provider";
+import { useUIStore } from "@/stores/ui-store";
+import { getLeadById, listLeadActivities, updateLeadStage } from "@/services/leads.service";
+import type { LeadActivityItem, LeadListItem } from "@/types/crm";
 
-// Valid next stages for each stage
-const NEXT_STAGES: Partial<Record<LeadStage, LeadStage[]>> = {
-  new: ["qualified", "lost"],
-  qualified: ["trial_proposed", "lost"],
-  trial_proposed: ["trial_booked", "lost"],
-  trial_booked: ["trial_attended", "trial_proposed", "lost"],
-  trial_attended: ["offer_sent", "lost"],
-  offer_sent: ["won", "lost"],
-  won: [],
-  lost: ["new"],
-};
-
-const MOCK_ACTIVITIES = [
-  {
-    id: "1",
-    action: "تم إنشاء الـ Lead",
-    date: "2026-04-05 08:00",
-    by: "الاء",
-    type: "create",
-  },
-  {
-    id: "2",
-    action: "أول تواصل عبر WhatsApp",
-    date: "2026-04-05 09:30",
-    by: "الاء",
-    type: "contact",
-  },
-  {
-    id: "3",
-    action: "تم التأهيل — سن مناسب + لابتوب",
-    date: "2026-04-05 09:45",
-    by: "الاء",
-    type: "stage",
-  },
-  {
-    id: "4",
-    action: "تم عرض السيشن التجريبي",
-    date: "2026-04-05 10:00",
-    by: "الاء",
-    type: "stage",
-  },
-];
-
-export default function LeadDetailsPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default function LeadDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const locale = useUIStore((state) => state.locale);
+  const isAr = locale === "ar";
+  const user = useCurrentUser();
+  const [lead, setLead] = useState<LeadListItem | null>(null);
+  const [activities, setActivities] = useState<LeadActivityItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [changingStage, setChangingStage] = useState<string | null>(null);
 
-  const lead = MOCK_LEADS.find((l) => l.id === id);
+  useEffect(() => {
+    let isMounted = true;
+    async function load() {
+      setLoading(true);
+      const [leadData, activityData] = await Promise.all([getLeadById(id), listLeadActivities(id)]);
+      if (isMounted) {
+        setLead(leadData);
+        setActivities(activityData);
+        setLoading(false);
+      }
+    }
+    load();
+    return () => {
+      isMounted = false;
+    };
+  }, [id]);
 
-  if (!lead) {
+  const currentStageConfig = useMemo(() => (lead ? STAGE_CONFIGS[lead.stage] : null), [lead]);
+  const nextStages = useMemo(() => (lead ? NEXT_STAGE_MAP[lead.stage] ?? [] : []), [lead]);
+
+  const handleStageChange = async (stage: LeadListItem["stage"]) => {
+    if (!lead) return;
+    setChangingStage(stage);
+    const updated = await updateLeadStage(id, stage, user.fullNameAr || user.fullName);
+    const refreshedActivities = await listLeadActivities(id);
+    if (updated) {
+      setLead(updated);
+      setActivities(refreshedActivities);
+      toast.success(t(locale, `تم نقل العميل إلى ${getStageLabel(stage, locale)}`, `Lead moved to ${getStageLabel(stage, locale)}`));
+    }
+    setChangingStage(null);
+  };
+
+  if (loading) {
+    return <div className="rounded-2xl border border-border bg-card p-12 text-center text-muted-foreground">{t(locale, "جارِ تحميل بيانات العميل...", "Loading lead details...")}</div>;
+  }
+
+  if (!lead || !currentStageConfig) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
-        <p className="text-muted-foreground text-lg">Lead غير موجود</p>
-        <button
-          onClick={() => router.push("/leads")}
-          className="mt-4 text-brand-600 hover:underline text-sm"
-        >
-          رجوع للقائمة
-        </button>
+        <p className="text-lg text-muted-foreground">{t(locale, "العميل غير موجود", "Lead not found")}</p>
+        <button onClick={() => router.push("/leads")} className="mt-4 text-sm text-brand-600 hover:underline">{t(locale, "رجوع للقائمة", "Back to leads")}</button>
       </div>
     );
   }
 
-  const currentStageConfig = STAGE_CONFIGS[lead.stage];
-  const nextStages = NEXT_STAGES[lead.stage] ?? [];
-
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => router.push("/leads")}
-            className="p-2 rounded-xl hover:bg-muted transition-colors text-muted-foreground"
-          >
-            <ArrowRight size={20} />
+          <button onClick={() => router.push("/leads")} className="rounded-xl p-2 text-muted-foreground transition-colors hover:bg-muted">
+            {isAr ? <ArrowRight size={20} /> : <ArrowLeft size={20} />}
           </button>
           <div>
-            <h1 className="text-2xl font-bold text-foreground">
-              {lead.childName}
-            </h1>
-            <p className="text-muted-foreground text-sm">
-              {lead.parentName} — {lead.parentPhone}
-            </p>
+            <h1 className="text-2xl font-bold text-foreground">{lead.childName}</h1>
+            <p className="text-sm text-muted-foreground">{lead.parentName} — {lead.parentPhone}</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <StageBadge stage={lead.stage} />
           <TemperatureBadge temperature={lead.temperature} />
-          <button
-            className={cn(
-              "inline-flex items-center gap-2 px-4 py-2 rounded-xl",
-              "bg-brand-700 text-white text-sm font-semibold",
-              "hover:bg-brand-600 transition-colors"
-            )}
-          >
+          <Link href={`/leads/${id}/edit`} className="inline-flex items-center gap-2 rounded-2xl bg-brand-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600">
             <Edit size={16} />
-            تعديل
-          </button>
+            {t(locale, "تعديل البيانات", "Edit details")}
+          </Link>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Info — 2 columns */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Pipeline Progress */}
-          <div className="bg-card rounded-2xl border border-border p-4">
-            <h3 className="font-bold text-foreground mb-4">مسار المبيعات</h3>
-            <div className="flex items-center gap-1 overflow-x-auto pb-2">
-              {Object.values(STAGE_CONFIGS).map((stage, index) => {
-                const isActive = stage.key === lead.stage;
-                const isPast = stage.order < currentStageConfig.order;
-
-                return (
-                  <div key={stage.key} className="flex items-center">
-                    <div
-                      className={cn(
-                        "shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all",
-                        isActive && "ring-offset-2 scale-110",
-                        isPast && "opacity-60"
-                      )}
-                      style={{
-                        backgroundColor: isActive
-                          ? stage.color
-                          : stage.bgColor,
-                        color: isActive ? "white" : stage.textColor,
-                        boxShadow: isActive
-                          ? `0 0 0 2px white, 0 0 0 4px ${stage.color}`
-                          : "none",
-                      }}
-                    >
-                      {stage.labelAr}
-                    </div>
-                    {index < Object.values(STAGE_CONFIGS).length - 1 && (
-                      <ChevronLeft
-                        size={14}
-                        className="text-muted-foreground mx-0.5 shrink-0"
-                      />
-                    )}
-                  </div>
-                );
-              })}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
+          <div className="rounded-2xl border border-border bg-card p-4">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <h3 className="font-bold text-foreground">{t(locale, "مسار البيع", "Sales pipeline")}</h3>
+              <span className="text-xs text-muted-foreground">{t(locale, "المرحلة الحالية", "Current stage")}: {getStageLabel(lead.stage, locale)}</span>
             </div>
 
-            {/* Stage Actions */}
-            {nextStages.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-border">
-                <p className="text-xs text-muted-foreground mb-2">
-                  نقل إلى:
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {nextStages.map((stageKey) => {
-                    const stageConfig = STAGE_CONFIGS[stageKey];
+            <div className="rounded-2xl border border-border/70 bg-muted/20 p-3">
+              <div className="max-w-full overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <div className="flex min-w-max items-center gap-2">
+                  {PIPELINE_STAGES.map((stageKey, index) => {
+                    const stage = STAGE_CONFIGS[stageKey];
+                    const isActive = stage.key === lead.stage;
+                    const isPast = stage.order < currentStageConfig.order;
+
                     return (
-                      <button
-                        key={stageKey}
-                        className={cn(
-                          "px-3 py-1.5 rounded-xl text-xs font-semibold",
-                          "border-2 transition-all hover:scale-105"
+                      <div key={stage.key} className="flex shrink-0 items-center gap-2">
+                        <div
+                          className={cn(
+                            "inline-flex min-h-11 items-center justify-center rounded-full border px-4 text-xs font-semibold whitespace-nowrap transition-all",
+                            isActive && "shadow-sm ring-2 ring-offset-1 ring-offset-background",
+                            isPast && !isActive && "opacity-80",
+                          )}
+                          style={{
+                            backgroundColor: isActive ? stage.color : stage.bgColor,
+                            color: isActive ? "#ffffff" : stage.textColor,
+                            borderColor: isActive ? stage.color : `${stage.color}33`,
+                            ringColor: `${stage.color}22`
+                          }}
+                        >
+                          {getStageLabel(stage.key, locale)}
+                        </div>
+                        {index < PIPELINE_STAGES.length - 1 && (
+                          <div className="flex items-center gap-1 px-1 text-muted-foreground/70">
+                            <div className="h-px w-4 bg-border" />
+                            {isAr ? <ArrowLeft size={12} /> : <ArrowRight size={12} />}
+                          </div>
                         )}
-                        style={{
-                          borderColor: stageConfig.color,
-                          color: stageConfig.textColor,
-                          backgroundColor: stageConfig.bgColor,
-                        }}
-                      >
-                        {stageConfig.labelAr}
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
               </div>
+            </div>
+
+            {nextStages.length > 0 && (
+              <div className="mt-4 border-t border-border pt-4">
+                <p className="mb-3 text-xs text-muted-foreground">{t(locale, "نقل إلى", "Move to")}</p>
+                <div className="flex flex-wrap gap-2">
+                  {nextStages.map((stage) => (
+                    <button
+                      key={stage}
+                      disabled={changingStage === stage}
+                      onClick={() => handleStageChange(stage)}
+                      className="inline-flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-semibold transition-all hover:-translate-y-0.5 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+                      style={{
+                        borderColor: STAGE_CONFIGS[stage].color,
+                        color: STAGE_CONFIGS[stage].textColor,
+                        backgroundColor: STAGE_CONFIGS[stage].bgColor,
+                      }}
+                    >
+                      {changingStage === stage ? t(locale, "جارِ النقل...", "Moving...") : getStageLabel(stage, locale)}
+                      {isAr ? <ArrowLeft size={13} className="opacity-70" /> : <ArrowRight size={13} className="opacity-70" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
 
-          {/* Info Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Child Info */}
-            <div className="bg-card rounded-2xl border border-border p-4">
-              <h3 className="font-bold text-foreground mb-3 flex items-center gap-2">
-                <Baby size={18} className="text-brand-600" />
-                معلومات الطفل
-              </h3>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="rounded-2xl border border-border bg-card p-4">
+              <h3 className="mb-3 flex items-center gap-2 font-bold text-foreground"><Baby size={18} className="text-brand-600" />{t(locale, "معلومات الطفل", "Child information")}</h3>
               <div className="space-y-3">
-                <InfoRow label="الاسم" value={lead.childName} />
-                <InfoRow label="العمر" value={`${lead.childAge} سنة`} />
-                <InfoRow
-                  label="الكورس المقترح"
-                  value={lead.suggestedCourse ?? "لم يحدد"}
-                />
+                <InfoRow label={t(locale, "الاسم", "Name")} value={lead.childName} align={isAr ? "left" : "right"} />
+                <InfoRow label={t(locale, "العمر", "Age")} value={`${lead.childAge} ${t(locale, "سنة", "years")}`} align={isAr ? "left" : "right"} />
+                <InfoRow label={t(locale, "الكورس المقترح", "Suggested course")} value={formatCourseLabel(lead.suggestedCourse, locale)} align={isAr ? "left" : "right"} />
               </div>
             </div>
 
-            {/* Parent Info */}
-            <div className="bg-card rounded-2xl border border-border p-4">
-              <h3 className="font-bold text-foreground mb-3 flex items-center gap-2">
-                <User size={18} className="text-brand-600" />
-                ولي الأمر
-              </h3>
+            <div className="rounded-2xl border border-border bg-card p-4">
+              <h3 className="mb-3 flex items-center gap-2 font-bold text-foreground"><User size={18} className="text-brand-600" />{t(locale, "ولي الأمر", "Parent")}</h3>
               <div className="space-y-3">
-                <InfoRow label="الاسم" value={lead.parentName} />
-                <InfoRow label="الهاتف" value={lead.parentPhone} />
-                <InfoRow label="المصدر" value={lead.source} />
+                <InfoRow label={t(locale, "الاسم", "Name")} value={lead.parentName} align={isAr ? "left" : "right"} />
+                <InfoRow label={t(locale, "الهاتف", "Phone")} value={lead.parentPhone} align={isAr ? "left" : "right"} />
+                <InfoRow label={t(locale, "المصدر", "Source")} value={formatLeadSource(lead.source, locale)} align={isAr ? "left" : "right"} />
               </div>
             </div>
           </div>
 
-          {/* Notes */}
-          <div className="bg-card rounded-2xl border border-border p-4">
-            <h3 className="font-bold text-foreground mb-3 flex items-center gap-2">
-              <MessageSquare size={18} className="text-brand-600" />
-              ملاحظات
-            </h3>
-            <p className="text-foreground text-sm leading-relaxed">
-              {lead.notes ?? "لا توجد ملاحظات"}
-            </p>
+          <div className="rounded-2xl border border-border bg-card p-4">
+            <h3 className="mb-3 flex items-center gap-2 font-bold text-foreground"><MessageSquare size={18} className="text-brand-600" />{t(locale, "ملاحظات", "Notes")}</h3>
+            <p className="text-sm leading-relaxed text-foreground">{lead.notes ?? t(locale, "لا توجد ملاحظات بعد", "No notes yet")}</p>
           </div>
         </div>
 
-        {/* Sidebar — Activity Timeline */}
         <div className="space-y-6">
-          {/* Quick Info */}
-          <div className="bg-card rounded-2xl border border-border p-4">
-            <h3 className="font-bold text-foreground mb-3">معلومات سريعة</h3>
+          <div className="rounded-2xl border border-border bg-card p-4">
+            <h3 className="mb-3 font-bold text-foreground">{t(locale, "معلومات سريعة", "Quick info")}</h3>
             <div className="space-y-3">
-              <InfoRow label="المسؤول" value={lead.assignedToName} />
-              <InfoRow
-                label="تاريخ الإنشاء"
-                value={new Date(lead.createdAt).toLocaleDateString("ar-EG")}
-              />
-              <InfoRow
-                label="آخر تواصل"
-                value={
-                  lead.lastContactAt
-                    ? new Date(lead.lastContactAt).toLocaleDateString("ar-EG")
-                    : "لم يتم"
-                }
-              />
-              <InfoRow
-                label="المتابعة القادمة"
-                value={
-                  lead.nextFollowUpAt
-                    ? new Date(lead.nextFollowUpAt).toLocaleDateString("ar-EG")
-                    : "غير محددة"
-                }
-              />
+              <InfoRow label={t(locale, "المسؤول", "Owner")} value={lead.assignedToName} align={isAr ? "left" : "right"} />
+              <InfoRow label={t(locale, "تاريخ الإنشاء", "Created at")} value={formatDate(lead.createdAt, locale)} align={isAr ? "left" : "right"} />
+              <InfoRow label={t(locale, "آخر تواصل", "Last contact")} value={formatDate(lead.lastContactAt, locale)} align={isAr ? "left" : "right"} />
+              <InfoRow label={t(locale, "المتابعة القادمة", "Next follow-up")} value={formatDateTime(lead.nextFollowUpAt, locale)} align={isAr ? "left" : "right"} />
             </div>
           </div>
 
-          {/* Activity Timeline */}
-          <div className="bg-card rounded-2xl border border-border p-4">
-            <h3 className="font-bold text-foreground mb-4 flex items-center gap-2">
-              <Clock size={18} className="text-brand-600" />
-              سجل النشاطات
-            </h3>
+          <div className="rounded-2xl border border-border bg-card p-4">
+            <h3 className="mb-4 flex items-center gap-2 font-bold text-foreground"><Clock size={18} className="text-brand-600" />{t(locale, "سجل النشاطات", "Activity log")}</h3>
             <div className="space-y-4">
-              {MOCK_ACTIVITIES.map((activity, index) => (
-                <div key={activity.id} className="flex gap-3">
-                  {/* Timeline Line */}
-                  <div className="flex flex-col items-center">
-                    <div
-                      className={cn(
-                        "w-2.5 h-2.5 rounded-full shrink-0",
-                        activity.type === "create" && "bg-brand-500",
-                        activity.type === "contact" && "bg-success-500",
-                        activity.type === "stage" && "bg-warning-500"
-                      )}
-                    />
-                    {index < MOCK_ACTIVITIES.length - 1 && (
-                      <div className="w-0.5 flex-1 bg-border mt-1" />
-                    )}
+              {activities.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{t(locale, "لا توجد نشاطات مسجلة حتى الآن", "No activities logged yet")}</p>
+              ) : (
+                activities.map((activity, index) => (
+                  <div key={activity.id} className="flex gap-3">
+                    <div className="flex flex-col items-center">
+                      <div className={cn("h-2.5 w-2.5 shrink-0 rounded-full", activity.type === "create" && "bg-brand-500", activity.type === "contact" && "bg-success-500", activity.type === "stage" && "bg-warning-500", activity.type === "note" && "bg-muted-foreground")} />
+                      {index < activities.length - 1 && <div className="mt-1 w-0.5 flex-1 bg-border" />}
+                    </div>
+                    <div className="pb-4">
+                      <p className="text-sm text-foreground">{activity.action}</p>
+                      <p className="mt-0.5 text-[10px] text-muted-foreground">{formatDateTime(activity.date, locale)} — {activity.by}</p>
+                    </div>
                   </div>
-
-                  {/* Content */}
-                  <div className="pb-4">
-                    <p className="text-sm text-foreground">
-                      {activity.action}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">
-                      {activity.date} — {activity.by}
-                    </p>
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -315,11 +239,11 @@ export default function LeadDetailsPage({
   );
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function InfoRow({ label, value, align = "left" }: { label: string; value: string; align?: "left" | "right" }) {
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span className="text-sm font-medium text-foreground">{value}</span>
+    <div className="flex items-center justify-between gap-4 text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <span className={cn("font-medium text-foreground", align === "left" ? "text-left" : "text-right")}>{value}</span>
     </div>
   );
 }

@@ -14,8 +14,8 @@ import {
 import type { UserRole } from "@/types/common.types";
 
 /**
- * Sidebar navigation configuration
- * Single source of truth for routes + role access
+ * Sidebar navigation — single source of truth
+ * Owner = same access as Admin
  * @author Abdelrahman
  */
 
@@ -44,7 +44,7 @@ export const navigationGroups: NavigationGroup[] = [
         titleEn: "Dashboard",
         href: "/",
         icon: LayoutDashboard,
-        roles: ["admin", "sales", "ops", "owner"],
+        roles: ["admin", "owner", "sales", "ops"],
       },
     ],
   },
@@ -57,14 +57,14 @@ export const navigationGroups: NavigationGroup[] = [
         titleEn: "Leads",
         href: "/leads",
         icon: Users,
-        roles: ["admin", "sales"],
+        roles: ["admin", "owner", "sales"],
       },
       {
         titleAr: "المتابعات",
         titleEn: "Follow-ups",
         href: "/follow-ups",
         icon: ClipboardCheck,
-        roles: ["admin", "sales"],
+        roles: ["admin", "owner", "sales", "ops"],
       },
     ],
   },
@@ -77,28 +77,28 @@ export const navigationGroups: NavigationGroup[] = [
         titleEn: "Students",
         href: "/students",
         icon: GraduationCap,
-        roles: ["admin", "ops", "owner"],
+        roles: ["admin", "owner", "sales", "ops"],
       },
       {
         titleAr: "أولياء الأمور",
         titleEn: "Parents",
         href: "/parents",
         icon: UserCircle,
-        roles: ["admin", "ops"],
+        roles: ["admin", "owner", "ops"],
       },
       {
         titleAr: "المدرسين",
         titleEn: "Teachers",
         href: "/teachers",
         icon: BookOpen,
-        roles: ["admin", "ops", "owner"],
+        roles: ["admin", "owner", "ops"],
       },
       {
         titleAr: "الجدول",
         titleEn: "Schedule",
         href: "/schedule",
         icon: CalendarDays,
-        roles: ["admin", "ops", "owner"],
+        roles: ["admin", "owner", "ops"],
       },
     ],
   },
@@ -111,7 +111,7 @@ export const navigationGroups: NavigationGroup[] = [
         titleEn: "Payments",
         href: "/payments",
         icon: Wallet,
-        roles: ["admin", "sales", "owner"],
+        roles: ["admin", "owner", "sales", "ops"],
       },
     ],
   },
@@ -137,7 +137,7 @@ export const navigationGroups: NavigationGroup[] = [
         titleEn: "Settings",
         href: "/settings",
         icon: Settings,
-        roles: ["admin"],
+        roles: ["admin", "owner"],
       },
     ],
   },

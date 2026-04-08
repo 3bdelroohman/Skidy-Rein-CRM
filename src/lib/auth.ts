@@ -38,21 +38,32 @@ export async function getCurrentUser() {
     error,
   } = await supabase.auth.getUser();
 
-  // Not authenticated → null (middleware handles redirect)
   if (error || !user) return null;
 
-  // Try to get profile
-  const { data: profile } = await supabase
+  // Query profile — depends on RLS SELECT policy
+  const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", user.id)
     .maybeSingle();
 
-  // Determine role: use DB role if valid, otherwise "owner" (most restricted)
-  // NEVER return null here — user IS authenticated, profile issue ≠ auth issue
-  const dbRole = profile?.role as UserRole | undefined;
+  // Debug logging (visible in Vercel Function logs)
+  if (profileError) {
+    console.error("[auth] Profile query error:", profileError.message);
+  }
+  if (!profile) {
+    console.warn("[auth] No profile for:", user.id, user.email);
+  }
+  if (profile) {
+    console.info("[auth] Profile loaded:", user.email, "role:", profile.role);
+  }
+
+  // Extract role — fallback "owner" (least privileged) if profile missing
+  const dbRole = profile?.role as string | undefined;
   const role: UserRole =
-    dbRole && VALID_ROLES.includes(dbRole) ? dbRole : "owner";
+    dbRole && VALID_ROLES.includes(dbRole as UserRole)
+      ? (dbRole as UserRole)
+      : "owner";
 
   return {
     id: user.id,

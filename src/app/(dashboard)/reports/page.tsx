@@ -1,133 +1,177 @@
 "use client";
 
-import { BarChart3, TrendingUp, Users, Wallet, Target, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  BarChart3,
+  Clock,
+  Target,
+  Users,
+  Wallet,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getConversionTerm, t } from "@/lib/locale";
+import { getLocalizedFunnelStage, getLocalizedLossReason, getReportsData } from "@/services/reports.service";
+import { useUIStore } from "@/stores/ui-store";
+import type { ReportsData } from "@/types/crm";
 
-const FUNNEL_DATA = [
-  { stage: "جديد", count: 45, color: "#6366F1" },
-  { stage: "مؤهل", count: 32, color: "#8B5CF6" },
-  { stage: "تم عرض Trial", count: 25, color: "#EC4899" },
-  { stage: "تم الحجز", count: 20, color: "#F59E0B" },
-  { stage: "حضر Trial", count: 16, color: "#10B981" },
-  { stage: "تم إرسال العرض", count: 12, color: "#3B82F6" },
-  { stage: "تم الدفع", count: 8, color: "#059669" },
-];
-
-const KPI_DATA = [
-  { label: "معدل التحويل", value: "17.8%", change: "+2.3%", up: true, icon: Target },
-  { label: "إيراد الشهر", value: "45,000 ج.م", change: "+10%", up: true, icon: Wallet },
-  { label: "طلاب جدد", value: "8", change: "+3", up: true, icon: Users },
-  { label: "متوسط وقت التحويل", value: "5.2 يوم", change: "-0.8", up: true, icon: TrendingUp },
-];
-
-const LOSS_REASONS = [
-  { reason: "السعر", count: 12, pct: 35 },
-  { reason: "لا يرد", count: 8, pct: 23 },
-  { reason: "يريد أوفلاين", count: 5, pct: 15 },
-  { reason: "مؤجل للامتحانات", count: 4, pct: 12 },
-  { reason: "لا يوجد لابتوب", count: 3, pct: 9 },
-  { reason: "أخرى", count: 2, pct: 6 },
-];
-
-const SALES_PERFORMANCE = [
-  { name: "الاء", leads: 25, won: 5, rate: "20%", revenue: 22500 },
-  { name: "سمر", leads: 20, won: 3, rate: "15%", revenue: 22500 },
-];
+const KPI_ICON_MAP = {
+  target: Target,
+  wallet: Wallet,
+  users: Users,
+  clock: Clock,
+} as const;
 
 export default function ReportsPage() {
+  const locale = useUIStore((state) => state.locale);
+  const isAr = locale === "ar";
+  const [data, setData] = useState<ReportsData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function load() {
+      setLoading(true);
+      const reports = await getReportsData(locale);
+      if (isMounted) {
+        setData(reports);
+        setLoading(false);
+      }
+    }
+    load();
+    return () => {
+      isMounted = false;
+    };
+  }, [locale]);
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+      <div className="rounded-3xl border border-border bg-card p-6">
+        <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
           <BarChart3 size={28} className="text-brand-600" />
-          التقارير
+          {t(locale, "التقارير", "Reports")}
         </h1>
-        <p className="text-muted-foreground text-sm mt-1">تحليلات الأداء والمبيعات — أبريل 2026</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {t(locale, "قراءة تنفيذية لمعدل الاشتراك، القمع البيعي، أسباب الفقد، وأداء الفريق", "Executive view of enrollment rate, sales funnel, loss reasons, and team performance")}
+        </p>
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {KPI_DATA.map((kpi) => {
-          const Icon = kpi.icon;
-          return (
-            <div key={kpi.label} className="bg-card rounded-2xl border border-border p-4">
-              <div className="flex items-center justify-between mb-2">
-                <Icon size={20} className="text-brand-600" />
-                <span className={cn("text-xs font-semibold flex items-center gap-0.5", kpi.up ? "text-success-600" : "text-danger-600")}>
-                  {kpi.up ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                  {kpi.change}
-                </span>
-              </div>
-              <p className="text-2xl font-bold text-foreground">{kpi.value}</p>
-              <p className="text-xs text-muted-foreground mt-1">{kpi.label}</p>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Funnel */}
-        <div className="bg-card rounded-2xl border border-border p-5">
-          <h3 className="font-bold text-foreground mb-4">قمع المبيعات</h3>
-          <div className="space-y-3">
-            {FUNNEL_DATA.map((item, i) => (
-              <div key={item.stage} className="flex items-center gap-3">
-                <span className="text-xs text-muted-foreground w-28 shrink-0 text-left">{item.stage}</span>
-                <div className="flex-1 h-8 bg-muted/50 rounded-lg overflow-hidden">
-                  <div className="h-full rounded-lg flex items-center px-2 transition-all" style={{ width: `${(item.count / FUNNEL_DATA[0].count) * 100}%`, backgroundColor: item.color }}>
-                    <span className="text-white text-xs font-bold">{item.count}</span>
+      {loading || !data ? (
+        <div className="rounded-2xl border border-border bg-card p-12 text-center text-muted-foreground">
+          {t(locale, "جارِ تجهيز التقرير...", "Preparing report...")}
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+            {data.kpis.map((kpi) => {
+              const Icon = KPI_ICON_MAP[kpi.icon];
+              return (
+                <div key={kpi.label} className="rounded-2xl border border-border bg-card p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300">
+                      <Icon size={20} />
+                    </div>
+                    <span className={cn("flex items-center gap-0.5 text-xs font-semibold", kpi.up ? "text-success-600" : "text-danger-600")}>
+                      {kpi.up ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+                      {kpi.change}
+                    </span>
                   </div>
+                  <p className="text-2xl font-bold text-foreground">{kpi.value}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{kpi.label}</p>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+            <div className="space-y-6">
+              <div className="rounded-2xl border border-border bg-card p-5">
+                <h3 className="mb-4 font-bold text-foreground">{t(locale, "قمع المبيعات", "Sales funnel")}</h3>
+                <div className="space-y-4">
+                  {data.funnel.map((item) => {
+                    const base = Math.max(1, data.funnel[0]?.count || 1);
+                    return (
+                      <div key={item.stage} className="space-y-2">
+                        <div className="flex items-center justify-between gap-3 text-sm">
+                          <span className="font-medium text-foreground">{getLocalizedFunnelStage(item.stage, locale)}</span>
+                          <span className="text-muted-foreground">{item.count}</span>
+                        </div>
+                        <div className="h-3 overflow-hidden rounded-full bg-muted/60">
+                          <div className="h-full rounded-full transition-all" style={{ width: `${(item.count / base) * 100}%`, backgroundColor: item.color }} />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
 
-        {/* Loss Reasons */}
-        <div className="bg-card rounded-2xl border border-border p-5">
-          <h3 className="font-bold text-foreground mb-4">أسباب الخسارة</h3>
-          <div className="space-y-3">
-            {LOSS_REASONS.map((item) => (
-              <div key={item.reason} className="flex items-center gap-3">
-                <span className="text-xs text-foreground w-32 shrink-0">{item.reason}</span>
-                <div className="flex-1 h-6 bg-muted/50 rounded-lg overflow-hidden">
-                  <div className="h-full bg-danger-400 rounded-lg" style={{ width: `${item.pct}%` }} />
+              <div className="rounded-2xl border border-border bg-card p-5">
+                <h3 className="mb-4 font-bold text-foreground">{t(locale, "قراءة سريعة", "Quick read")}</h3>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <InsightTile title={getConversionTerm("conversionRate", locale)} value={data.kpis[0]?.value || "—"} />
+                  <InsightTile title={t(locale, "أكثر سبب فقد", "Top loss reason")} value={data.lossReasons[0] ? getLocalizedLossReason(data.lossReasons[0].key, locale) : "—"} />
+                  <InsightTile title={t(locale, "أفضل عضو", "Top rep")} value={data.salesPerformance[0]?.name || "—"} />
                 </div>
-                <span className="text-xs text-muted-foreground w-8 text-left">{item.pct}%</span>
               </div>
-            ))}
-          </div>
-        </div>
-      </div>
+            </div>
 
-      {/* Sales Performance */}
-      <div className="bg-card rounded-2xl border border-border p-5">
-        <h3 className="font-bold text-foreground mb-4">أداء فريق المبيعات</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="text-right px-4 py-2 font-semibold text-muted-foreground">الاسم</th>
-                <th className="text-right px-4 py-2 font-semibold text-muted-foreground">Leads</th>
-                <th className="text-right px-4 py-2 font-semibold text-muted-foreground">Won</th>
-                <th className="text-right px-4 py-2 font-semibold text-muted-foreground">معدل التحويل</th>
-                <th className="text-right px-4 py-2 font-semibold text-muted-foreground">الإيراد</th>
-              </tr>
-            </thead>
-            <tbody>
-              {SALES_PERFORMANCE.map((s) => (
-                <tr key={s.name} className="border-b border-border last:border-0">
-                  <td className="px-4 py-3 font-semibold text-foreground">{s.name}</td>
-                  <td className="px-4 py-3 text-foreground">{s.leads}</td>
-                  <td className="px-4 py-3 text-success-600 font-bold">{s.won}</td>
-                  <td className="px-4 py-3 text-foreground">{s.rate}</td>
-                  <td className="px-4 py-3 font-bold text-foreground">{s.revenue.toLocaleString()} ج.م</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+            <div className="space-y-6">
+              <div className="rounded-2xl border border-border bg-card p-5">
+                <h3 className="mb-4 font-bold text-foreground">{t(locale, "أسباب عدم الاشتراك", "Loss reasons")}</h3>
+                <div className="space-y-3">
+                  {data.lossReasons.map((item) => (
+                    <div key={item.key} className="flex items-center gap-3">
+                      <span className="w-40 shrink-0 text-xs text-foreground">{getLocalizedLossReason(item.key, locale)}</span>
+                      <div className="h-6 flex-1 overflow-hidden rounded-lg bg-muted/50">
+                        <div className="h-full rounded-lg bg-danger-400" style={{ width: `${item.pct}%` }} />
+                      </div>
+                      <span className="w-10 text-left text-xs text-muted-foreground">{item.pct}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-border bg-card p-5">
+                <h3 className="mb-4 font-bold text-foreground">{t(locale, "أداء فريق المبيعات", "Sales team performance")}</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[640px] text-sm">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className={cn("px-4 py-2 font-semibold text-muted-foreground", isAr ? "text-right" : "text-left")}>{t(locale, "الاسم", "Name")}</th>
+                        <th className={cn("px-4 py-2 font-semibold text-muted-foreground", isAr ? "text-right" : "text-left")}>{t(locale, "العملاء", "Leads")}</th>
+                        <th className={cn("px-4 py-2 font-semibold text-muted-foreground", isAr ? "text-right" : "text-left")}>{getConversionTerm("successfulConversion", locale)}</th>
+                        <th className={cn("px-4 py-2 font-semibold text-muted-foreground", isAr ? "text-right" : "text-left")}>{getConversionTerm("conversionRate", locale)}</th>
+                        <th className={cn("px-4 py-2 font-semibold text-muted-foreground", isAr ? "text-right" : "text-left")}>{t(locale, "الإيراد", "Revenue")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.salesPerformance.map((item) => (
+                        <tr key={item.name} className="border-b border-border last:border-0">
+                          <td className="px-4 py-3 font-semibold text-foreground">{item.name}</td>
+                          <td className="px-4 py-3 text-foreground">{item.leads}</td>
+                          <td className="px-4 py-3 font-bold text-success-600">{item.won}</td>
+                          <td className="px-4 py-3 text-foreground">{item.rate}</td>
+                          <td className="px-4 py-3 font-bold text-foreground">{locale === "ar" ? item.revenue.toLocaleString("ar-EG") : item.revenue.toLocaleString("en-US")} {t(locale, "ج.م", "EGP")}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function InsightTile({ title, value }: { title: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-border bg-background p-4">
+      <p className="text-xs text-muted-foreground">{title}</p>
+      <p className="mt-2 text-base font-bold text-foreground">{value}</p>
     </div>
   );
 }

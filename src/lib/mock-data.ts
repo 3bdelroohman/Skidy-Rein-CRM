@@ -1,9 +1,11 @@
 import type {
+  CourseType,
+  LeadSource,
   LeadStage,
   LeadTemperature,
-  LeadSource,
-  CourseType,
+  StudentStatus,
 } from "@/types/common.types";
+import type { FollowUpItem, LeadActivityItem } from "@/types/crm";
 
 export interface MockLead {
   id: string;
@@ -21,6 +23,7 @@ export interface MockLead {
   nextFollowUpAt: string | null;
   notes: string | null;
   createdAt: string;
+  lossReason?: null | "price";
 }
 
 export const MOCK_LEADS: MockLead[] = [
@@ -40,6 +43,7 @@ export const MOCK_LEADS: MockLead[] = [
     nextFollowUpAt: "2026-04-06T10:00:00",
     notes: "مهتم جداً — سأل عن المواعيد",
     createdAt: "2026-04-05T08:00:00",
+    lossReason: null,
   },
   {
     id: "2",
@@ -57,6 +61,7 @@ export const MOCK_LEADS: MockLead[] = [
     nextFollowUpAt: "2026-04-06T14:00:00",
     notes: "عندها لابتوب — مهتمة بالـ AI",
     createdAt: "2026-04-03T10:00:00",
+    lossReason: null,
   },
   {
     id: "3",
@@ -74,6 +79,7 @@ export const MOCK_LEADS: MockLead[] = [
     nextFollowUpAt: "2026-04-07T10:00:00",
     notes: "صاحب أحمد محمد — referral",
     createdAt: "2026-04-02T09:00:00",
+    lossReason: null,
   },
   {
     id: "4",
@@ -89,8 +95,9 @@ export const MOCK_LEADS: MockLead[] = [
     assignedToName: "سمر",
     lastContactAt: "2026-04-05T09:00:00",
     nextFollowUpAt: "2026-04-08T16:00:00",
-    notes: "Trial يوم الثلاثاء 4 مساءً",
+    notes: "السيشن التجريبية يوم الثلاثاء 4 مساءً",
     createdAt: "2026-04-01T12:00:00",
+    lossReason: null,
   },
   {
     id: "5",
@@ -106,8 +113,9 @@ export const MOCK_LEADS: MockLead[] = [
     assignedToName: "الاء",
     lastContactAt: "2026-04-05T17:00:00",
     nextFollowUpAt: "2026-04-06T12:00:00",
-    notes: "حضرت Trial — المدرس أعجبها جداً",
+    notes: "حضرت السيشن التجريبية — المدرس أعجبها جداً",
     createdAt: "2026-03-28T08:00:00",
+    lossReason: null,
   },
   {
     id: "6",
@@ -125,6 +133,7 @@ export const MOCK_LEADS: MockLead[] = [
     nextFollowUpAt: "2026-04-06T18:00:00",
     notes: "أرسلنا العرض — ينتظر رد الأب",
     createdAt: "2026-03-25T14:00:00",
+    lossReason: null,
   },
   {
     id: "7",
@@ -140,8 +149,9 @@ export const MOCK_LEADS: MockLead[] = [
     assignedToName: "الاء",
     lastContactAt: "2026-04-04T16:00:00",
     nextFollowUpAt: null,
-    notes: "دفع — بدأ الكلاس",
+    notes: "تم الاشتراك — بدأ الكلاس",
     createdAt: "2026-03-20T10:00:00",
+    lossReason: null,
   },
   {
     id: "8",
@@ -159,6 +169,7 @@ export const MOCK_LEADS: MockLead[] = [
     nextFollowUpAt: null,
     notes: "السعر عالي — مؤجل للشهر الجاي",
     createdAt: "2026-03-15T11:00:00",
+    lossReason: "price",
   },
 ];
 
@@ -167,13 +178,14 @@ export const MOCK_TEAM = [
   { id: "2", name: "سمر", role: "sales" as const },
   { id: "3", name: "هاجر", role: "ops" as const },
 ];
+
 export interface MockStudent {
   id: string;
   fullName: string;
   age: number;
   parentName: string;
   parentPhone: string;
-  status: "trial" | "active" | "paused" | "at_risk" | "completed" | "churned";
+  status: StudentStatus;
   currentCourse: CourseType | null;
   className: string | null;
   enrollmentDate: string;
@@ -226,4 +238,23 @@ export const MOCK_TEACHERS: MockTeacher[] = [
   { id: "1", fullName: "أ. محمود حسن", phone: "01011112222", email: "mahmoud@skidyrein.com", specialization: ["scratch"], employment: "part_time", classesCount: 3, studentsCount: 15, isActive: true },
   { id: "2", fullName: "أ. دينا سمير", phone: "01033334444", email: "dina@skidyrein.com", specialization: ["python", "ai"], employment: "full_time", classesCount: 4, studentsCount: 20, isActive: true },
   { id: "3", fullName: "أ. كريم فتحي", phone: "01055556666", email: "karim@skidyrein.com", specialization: ["scratch", "web"], employment: "freelance", classesCount: 2, studentsCount: 8, isActive: true },
+];
+
+export const MOCK_FOLLOW_UPS: FollowUpItem[] = [
+  { id: "1", title: "متابعة يوسف — أول تواصل", leadId: "1", leadName: "يوسف أحمد", parentName: "أحمد محمد", type: "first_contact", channel: "whatsapp", priority: "high", scheduledAt: "2026-04-06T10:00:00", status: "pending", assignedTo: "الاء" },
+  { id: "2", title: "تذكير بالسيشن التجريبية — زين", leadId: "4", leadName: "زين فاطمة", parentName: "فاطمة حسن", type: "trial_reminder", channel: "whatsapp", priority: "urgent", scheduledAt: "2026-04-06T14:00:00", status: "pending", assignedTo: "سمر" },
+  { id: "3", title: "متابعة بعد السيشن — ليلى", leadId: "5", leadName: "ليلى هدى", parentName: "هدى إبراهيم", type: "post_trial", channel: "call", priority: "high", scheduledAt: "2026-04-06T12:00:00", status: "pending", assignedTo: "الاء" },
+  { id: "4", title: "إعادة تواصل — عمر", leadId: "3", leadName: "عمر محمد", parentName: "محمد علي", type: "re_engagement", channel: "whatsapp", priority: "medium", scheduledAt: "2026-04-07T10:00:00", status: "pending", assignedTo: "الاء" },
+  { id: "5", title: "متابعة الدفع — آدم", leadId: "6", leadName: "آدم خالد", parentName: "خالد عبدالله", type: "closing", channel: "whatsapp", priority: "high", scheduledAt: "2026-04-06T18:00:00", status: "pending", assignedTo: "سمر" },
+  { id: "6", title: "أول تواصل — Lead جديد", leadId: null, leadName: "حسن أيمن", parentName: "أيمن حسن", type: "first_contact", channel: "whatsapp", priority: "medium", scheduledAt: "2026-04-05T09:00:00", status: "overdue", assignedTo: "سمر" },
+  { id: "7", title: "متابعة ملك — تأكيد الدفع", leadId: "2", leadName: "ملك سارة", parentName: "سارة أحمد", type: "payment_reminder", channel: "call", priority: "medium", scheduledAt: "2026-04-04T15:00:00", status: "completed", assignedTo: "سمر" },
+];
+
+export const MOCK_LEAD_ACTIVITIES: LeadActivityItem[] = [
+  { id: "1", leadId: "1", action: "تم إنشاء العميل المحتمل", date: "2026-04-05T08:00:00", by: "الاء", type: "create" },
+  { id: "2", leadId: "1", action: "أول تواصل عبر واتساب", date: "2026-04-05T09:30:00", by: "الاء", type: "contact" },
+  { id: "3", leadId: "1", action: "تم التأهيل — سن مناسب + لابتوب", date: "2026-04-05T09:45:00", by: "الاء", type: "stage" },
+  { id: "4", leadId: "1", action: "عُرضت السيشن التجريبية", date: "2026-04-05T10:00:00", by: "الاء", type: "stage" },
+  { id: "5", leadId: "5", action: "حضرت السيشن التجريبية بنجاح", date: "2026-04-05T17:00:00", by: "الاء", type: "stage" },
+  { id: "6", leadId: "6", action: "تم إرسال العرض السعري", date: "2026-04-05T10:00:00", by: "سمر", type: "stage" },
 ];

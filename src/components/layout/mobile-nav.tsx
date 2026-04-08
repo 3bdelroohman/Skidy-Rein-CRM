@@ -16,18 +16,13 @@ export function MobileNav() {
   const pathname = usePathname();
   const { mobileSidebarOpen, setMobileSidebarOpen, locale } = useUIStore();
   const isAr = locale === "ar";
-
-  // Real user — not hardcoded!
   const user = useCurrentUser();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const displayName = isAr ? user.fullNameAr : user.fullName;
   const initial = user.fullName.charAt(0).toUpperCase();
-  const roleLabel = isAr
-    ? ROLE_PERMISSIONS[user.role].labelAr
-    : ROLE_PERMISSIONS[user.role].labelEn;
+  const roleLabel = isAr ? ROLE_PERMISSIONS[user.role].labelAr : ROLE_PERMISSIONS[user.role].labelEn;
 
-  // Filter nav by REAL user role
   const filteredGroups = navigationGroups
     .map((group) => ({
       ...group,
@@ -41,7 +36,6 @@ export function MobileNav() {
   };
 
   const handleClose = () => setMobileSidebarOpen(false);
-
   const handleLogout = async () => {
     setIsLoggingOut(true);
     await signOutClient();
@@ -51,7 +45,6 @@ export function MobileNav() {
     <AnimatePresence>
       {mobileSidebarOpen && (
         <>
-          {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -61,48 +54,36 @@ export function MobileNav() {
             onClick={handleClose}
           />
 
-          {/* Panel */}
           <motion.div
-            initial={{ x: "100%" }}
+            initial={{ x: isAr ? "100%" : "-100%" }}
             animate={{ x: 0 }}
-            exit={{ x: "100%" }}
+            exit={{ x: isAr ? "100%" : "-100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
             className={cn(
-              "fixed top-0 right-0 z-50 h-screen w-[280px]",
-              "bg-brand-950 lg:hidden",
-              "flex flex-col"
+              "fixed top-0 z-50 h-screen w-[280px] bg-brand-950 lg:hidden flex flex-col",
+              isAr ? "right-0" : "left-0",
             )}
           >
-            {/* Header */}
-            <div className="h-16 flex items-center justify-between px-4 border-b border-white/10">
+            <div className="flex h-16 items-center justify-between border-b border-white/10 px-4">
               <div className="flex items-center gap-3">
-                <div
-                  className="w-9 h-9 rounded-xl flex items-center justify-center"
-                  style={{ background: "#4338CA" }}
-                >
-                  <span className="text-white font-bold text-sm">SR</span>
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl" style={{ background: "#4338CA" }}>
+                  <span className="text-sm font-bold text-white">SR</span>
                 </div>
                 <div>
-                  <p className="text-white font-bold text-sm">Skidy Rein</p>
-                  <p className="text-white/50 text-[10px]">
-                    {isAr ? "لوحة التحكم" : "Dashboard"}
-                  </p>
+                  <p className="text-sm font-bold text-white">Skidy Rein</p>
+                  <p className="text-[10px] text-white/50">{isAr ? "لوحة التحكم" : "Dashboard"}</p>
                 </div>
               </div>
 
-              <button
-                onClick={handleClose}
-                className="p-2 rounded-xl text-white/40 hover:text-white hover:bg-white/10 transition-colors"
-              >
+              <button onClick={handleClose} className="rounded-xl p-2 text-white/40 transition-colors hover:bg-white/10 hover:text-white">
                 <X size={20} />
               </button>
             </div>
 
-            {/* Navigation */}
-            <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-6">
+            <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
               {filteredGroups.map((group) => (
                 <div key={group.labelEn}>
-                  <p className="text-white/40 text-[10px] font-semibold uppercase tracking-wider px-3 mb-2">
+                  <p className={cn("mb-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-white/40", !isAr && "text-left")}>
                     {isAr ? group.labelAr : group.labelEn}
                   </p>
 
@@ -117,23 +98,17 @@ export function MobileNav() {
                           href={item.href}
                           onClick={handleClose}
                           className={cn(
-                            "flex items-center gap-3 px-3 py-2.5 rounded-xl",
-                            "text-sm transition-all duration-200",
+                            "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all duration-200",
                             active
                               ? "bg-brand-700 text-white shadow-lg shadow-brand-700/30"
-                              : "text-white/60 hover:bg-white/8 hover:text-white"
+                              : "text-white/60 hover:bg-white/8 hover:text-white",
                           )}
                         >
-                          <Icon
-                            size={20}
-                            className={cn(
-                              active ? "text-cream-200" : "text-white/50"
-                            )}
-                          />
+                          <Icon size={20} className={cn(active ? "text-cream-200" : "text-white/50")} />
                           <span>{isAr ? item.titleAr : item.titleEn}</span>
 
                           {item.badge && item.badge > 0 && (
-                            <span className="mr-auto bg-danger-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5">
+                            <span className={cn("bg-danger-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5", isAr ? "mr-auto" : "ml-auto")}>
                               {item.badge}
                             </span>
                           )}
@@ -145,39 +120,24 @@ export function MobileNav() {
               ))}
             </nav>
 
-            {/* User Info + Logout */}
             <div className="border-t border-white/10 p-3">
-              <div className="flex items-center gap-3 rounded-xl p-2 bg-white/5">
-                <div
-                  className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                  style={{ background: "#4338CA" }}
-                >
-                  <span className="text-white text-xs font-bold">
-                    {initial}
-                  </span>
+              <div className="flex items-center gap-3 rounded-xl bg-white/5 p-2">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: "#4338CA" }}>
+                  <span className="text-xs font-bold text-white">{initial}</span>
                 </div>
 
-                <div className="flex-1 min-w-0">
-                  <p className="text-white text-xs font-semibold truncate">
-                    {displayName}
-                  </p>
-                  <p className="text-white/40 text-[10px]">{roleLabel}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-semibold text-white">{displayName}</p>
+                  <p className="text-[10px] text-white/40">{roleLabel}</p>
                 </div>
 
                 <button
                   onClick={handleLogout}
                   disabled={isLoggingOut}
-                  className={cn(
-                    "text-white/30 hover:text-red-400 transition-colors",
-                    isLoggingOut && "opacity-50 cursor-not-allowed"
-                  )}
-                  title={isAr ? "تسجيل الخروج" : "Sign Out"}
+                  className={cn("text-white/30 transition-colors hover:text-red-400", isLoggingOut && "cursor-not-allowed opacity-50")}
+                  title={isAr ? "تسجيل الخروج" : "Sign out"}
                 >
-                  {isLoggingOut ? (
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    <LogOut size={16} />
-                  )}
+                  {isLoggingOut ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : <LogOut size={16} />}
                 </button>
               </div>
             </div>

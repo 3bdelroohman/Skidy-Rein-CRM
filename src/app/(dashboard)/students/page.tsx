@@ -1,89 +1,115 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { GraduationCap, Search } from "lucide-react";
+import { useUIStore } from "@/stores/ui-store";
+import { getFilterLabel, t } from "@/lib/locale";
+import { STUDENT_STATUS_META, getMetaLabel } from "@/config/status-meta";
+import { formatCourseLabel, formatCurrencyEgp } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
-import { MOCK_STUDENTS } from "@/lib/mock-data";
-
-const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> = {
-  trial: { label: "تجريبي", color: "#D97706", bg: "#FFFBEB" },
-  active: { label: "نشط", color: "#059669", bg: "#ECFDF5" },
-  paused: { label: "متوقف", color: "#6B7280", bg: "#F3F4F6" },
-  at_risk: { label: "معرّض", color: "#DC2626", bg: "#FEF2F2" },
-  completed: { label: "مكتمل", color: "#2563EB", bg: "#EFF6FF" },
-  churned: { label: "مغادر", color: "#991B1B", bg: "#FEF2F2" },
-};
+import { listStudents } from "@/services/students.service";
+import type { StudentListItem } from "@/types/crm";
+import type { StudentStatus } from "@/types/common.types";
 
 export default function StudentsPage() {
+  const locale = useUIStore((state) => state.locale);
+  const isAr = locale === "ar";
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<StudentStatus | "all">("all");
+  const [students, setStudents] = useState<StudentListItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function load() {
+      setLoading(true);
+      const data = await listStudents();
+      if (isMounted) {
+        setStudents(data);
+        setLoading(false);
+      }
+    }
+    load();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const filtered = useMemo(() => {
-    return MOCK_STUDENTS.filter((s) => {
-      const matchSearch = !search || s.fullName.includes(search) || s.parentName.includes(search);
-      const matchStatus = statusFilter === "all" || s.status === statusFilter;
+    return students.filter((student) => {
+      const matchSearch = !search || student.fullName.includes(search) || student.parentName.includes(search);
+      const matchStatus = statusFilter === "all" || student.status === statusFilter;
       return matchSearch && matchStatus;
     });
-  }, [search, statusFilter]);
+  }, [search, statusFilter, students]);
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+        <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
           <GraduationCap size={28} className="text-brand-600" />
-          الطلاب
+          {t(locale, "الطلاب", "Students")}
         </h1>
-        <p className="text-muted-foreground text-sm mt-1">إدارة ومتابعة الطلاب المسجلين</p>
+        <p className="mt-1 text-sm text-muted-foreground">{t(locale, "رؤية أوضح للطلاب الحاليين والحالات التي تحتاج متابعة", "A clearer view of current students and cases that need attention")}</p>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row">
         <div className="relative flex-1">
-          <Search size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="بحث بالاسم..." className={cn("w-full pr-10 pl-4 py-2.5 rounded-xl", "bg-card border border-border text-foreground placeholder:text-muted-foreground", "focus:ring-2 focus:ring-ring text-sm")} />
+          <Search size={18} className={cn("absolute top-1/2 -translate-y-1/2 text-muted-foreground", isAr ? "right-3" : "left-3")} />
+          <input type="text" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t(locale, "بحث بالاسم أو ولي الأمر", "Search by student or parent")} className={cn("w-full rounded-xl bg-card py-2.5 text-sm text-foreground border border-border placeholder:text-muted-foreground focus:ring-2 focus:ring-ring", isAr ? "pr-10 pl-4" : "pl-10 pr-4")} />
         </div>
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-4 py-2.5 rounded-xl text-sm bg-card border border-border text-foreground">
-          <option value="all">كل الحالات</option>
-          {Object.entries(STATUS_MAP).map(([key, val]) => (
-            <option key={key} value={key}>{val.label}</option>
+        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StudentStatus | "all")} className="rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-foreground">
+          <option value="all">{getFilterLabel("allStudentStatuses", locale)}</option>
+          {Object.entries(STUDENT_STATUS_META).map(([key, meta]) => (
+            <option key={key} value={key}>{getMetaLabel(meta, locale)}</option>
           ))}
         </select>
       </div>
 
-      <div className="bg-card rounded-2xl border border-border overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-muted/50">
-                <th className="text-right px-4 py-3 font-semibold text-muted-foreground">الطالب</th>
-                <th className="text-right px-4 py-3 font-semibold text-muted-foreground">ولي الأمر</th>
-                <th className="text-right px-4 py-3 font-semibold text-muted-foreground">الحالة</th>
-                <th className="text-right px-4 py-3 font-semibold text-muted-foreground">الكورس</th>
-                <th className="text-right px-4 py-3 font-semibold text-muted-foreground">الكلاس</th>
-                <th className="text-right px-4 py-3 font-semibold text-muted-foreground">الحضور</th>
-                <th className="text-right px-4 py-3 font-semibold text-muted-foreground">المدفوع</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((s) => (
-                <tr key={s.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors cursor-pointer">
-                  <td className="px-4 py-3">
-                    <p className="font-semibold text-foreground">{s.fullName}</p>
-                    <p className="text-muted-foreground text-xs">{s.age} سنة</p>
-                  </td>
-                  <td className="px-4 py-3 text-foreground">{s.parentName}</td>
-                  <td className="px-4 py-3">
-                    <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ backgroundColor: STATUS_MAP[s.status]?.bg, color: STATUS_MAP[s.status]?.color }}>{STATUS_MAP[s.status]?.label}</span>
-                  </td>
-                  <td className="px-4 py-3"><span className="text-xs bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full dark:bg-brand-950 dark:text-brand-300">{s.currentCourse ?? "—"}</span></td>
-                  <td className="px-4 py-3 text-foreground text-xs">{s.className ?? "غير مسجل"}</td>
-                  <td className="px-4 py-3 text-foreground">{s.sessionsAttended} حصة</td>
-                  <td className="px-4 py-3 text-foreground font-semibold">{s.totalPaid.toLocaleString()} ج.م</td>
+      {loading ? (
+        <div className="rounded-2xl border border-border bg-card p-12 text-center text-muted-foreground">{t(locale, "جارِ تحميل الطلاب...", "Loading students...")}</div>
+      ) : (
+        <div className="overflow-hidden rounded-2xl border border-border bg-card">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/50">
+                  <th className={cn("px-4 py-3 font-semibold text-muted-foreground", isAr ? "text-right" : "text-left")}>{t(locale, "الطالب", "Student")}</th>
+                  <th className={cn("px-4 py-3 font-semibold text-muted-foreground", isAr ? "text-right" : "text-left")}>{t(locale, "ولي الأمر", "Parent")}</th>
+                  <th className={cn("px-4 py-3 font-semibold text-muted-foreground", isAr ? "text-right" : "text-left")}>{t(locale, "الحالة", "Status")}</th>
+                  <th className={cn("px-4 py-3 font-semibold text-muted-foreground", isAr ? "text-right" : "text-left")}>{t(locale, "الكورس", "Course")}</th>
+                  <th className={cn("px-4 py-3 font-semibold text-muted-foreground", isAr ? "text-right" : "text-left")}>{t(locale, "الكلاس", "Class")}</th>
+                  <th className={cn("px-4 py-3 font-semibold text-muted-foreground", isAr ? "text-right" : "text-left")}>{t(locale, "الحضور", "Attendance")}</th>
+                  <th className={cn("px-4 py-3 font-semibold text-muted-foreground", isAr ? "text-right" : "text-left")}>{t(locale, "المدفوع", "Paid")}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filtered.map((student) => {
+                  const meta = STUDENT_STATUS_META[student.status];
+                  return (
+                    <tr key={student.id} className="border-b border-border last:border-0 transition-colors hover:bg-muted/30">
+                      <td className="px-4 py-3">
+                        <Link href={`/students/${student.id}`} className="group block">
+                          <p className="font-semibold text-foreground transition-colors group-hover:text-brand-600">{student.fullName}</p>
+                          <p className="text-xs text-muted-foreground">{student.age} {t(locale, "سنة", "years")}</p>
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3 text-foreground">{student.parentName}</td>
+                      <td className="px-4 py-3"><span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: meta.bg, color: meta.color }}>{getMetaLabel(meta, locale)}</span></td>
+                      <td className="px-4 py-3"><span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs text-brand-700 dark:bg-brand-950 dark:text-brand-300">{formatCourseLabel(student.currentCourse, locale)}</span></td>
+                      <td className="px-4 py-3 text-xs text-foreground">{student.className ?? t(locale, "غير مسجل", "Not assigned")}</td>
+                      <td className="px-4 py-3 text-foreground">{student.sessionsAttended} {t(locale, "حصة", "sessions")}</td>
+                      <td className="px-4 py-3 font-semibold text-foreground">{formatCurrencyEgp(student.totalPaid, locale)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {!loading && filtered.length === 0 && <div className="py-12 text-center text-muted-foreground">{t(locale, "لا يوجد طلاب مطابقون للفلاتر الحالية", "No students match the current filters")}</div>}
         </div>
-      </div>
+      )}
     </div>
   );
 }
