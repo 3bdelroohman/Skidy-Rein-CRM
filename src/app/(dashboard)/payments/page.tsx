@@ -92,7 +92,7 @@ export default function PaymentsPage() {
         <MetricCard label={t(locale, "إجمالي المستحق", "Total expected")} value={formatCurrencyEgp(summary.totalExpected, locale)} colorClass="text-foreground" />
         <MetricCard label={t(locale, "إجمالي المحصل", "Total collected")} value={formatCurrencyEgp(summary.totalCollected, locale)} colorClass="text-success-600" />
         <MetricCard label={t(locale, "إجمالي المتأخر", "Total overdue")} value={formatCurrencyEgp(summary.totalOverdue, locale)} colorClass="text-danger-600" />
-        <MetricCard label={t(locale, "مستحق اليوم", "Due today")} value={summary.dueToday} colorClass="text-amber-600" />
+        <MetricCard label={t(locale, "مستحق اليوم", "Due today")} value={String(summary.dueToday)} colorClass="text-amber-600" />
         <MetricCard label={t(locale, "نسبة التحصيل", "Collection rate")} value={`${summary.collectionRate}%`} colorClass="text-brand-600" />
       </div>
 
