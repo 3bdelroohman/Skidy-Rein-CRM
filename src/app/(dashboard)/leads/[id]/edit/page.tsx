@@ -7,6 +7,7 @@ import { t } from "@/lib/locale";
 import { getLeadById, updateLead } from "@/services/leads.service";
 import { useUIStore } from "@/stores/ui-store";
 import type { CreateLeadInput, LeadListItem } from "@/types/crm";
+import { LoadingState, PageStateCard } from "@/components/shared/page-state";
 
 function toInitialValues(lead: LeadListItem): Partial<LeadFormValues> {
   return {
@@ -54,11 +55,29 @@ export default function EditLeadPage({ params }: { params: Promise<{ id: string 
   }
 
   if (loading) {
-    return <div className="rounded-2xl border border-border bg-card p-12 text-center text-muted-foreground">{t(locale, "جارِ تحميل بيانات العميل...", "Loading lead details...")}</div>;
+    return (
+      <LoadingState
+        titleAr="جارِ تحميل بيانات العميل"
+        titleEn="Loading lead details"
+        descriptionAr="يتم الآن تجهيز بيانات العميل قبل فتح شاشة التعديل."
+        descriptionEn="The lead data is being prepared before opening the edit screen."
+      />
+    );
   }
 
   if (!lead) {
-    return <div className="rounded-2xl border border-border bg-card p-12 text-center text-muted-foreground">{t(locale, "العميل غير موجود", "Lead not found")}</div>;
+    return (
+      <PageStateCard
+        variant="warning"
+        titleAr="العميل غير موجود"
+        titleEn="Lead not found"
+        descriptionAr="لا يمكن تعديل هذا الملف لأن الرابط غير صحيح أو لأن العنصر لم يعد موجودًا."
+        descriptionEn="This record cannot be edited because the link is incorrect or the item no longer exists."
+        actionHref="/leads"
+        actionLabelAr="العودة إلى العملاء المحتملين"
+        actionLabelEn="Back to leads"
+      />
+    );
   }
 
   return (

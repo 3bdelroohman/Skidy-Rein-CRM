@@ -8,6 +8,7 @@ import { STUDENT_STATUS_META, getMetaLabel } from "@/config/status-meta";
 import { getCourseLabel, t } from "@/lib/locale";
 import { formatCurrencyEgp, formatDate } from "@/lib/formatters";
 import { getStudentById } from "@/services/students.service";
+import { LoadingState, PageStateCard } from "@/components/shared/page-state";
 import type { StudentListItem } from "@/types/crm";
 
 export default function StudentDetailsPage({ params }: { params: Promise<{ id: string }> }) {
@@ -29,8 +30,31 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
     };
   }, [id]);
 
-  if (loading) return <div className="rounded-2xl border border-border bg-card p-12 text-center text-muted-foreground">{t(locale, "جارِ تحميل بيانات الطالب...", "Loading student details...")}</div>;
-  if (!student) return <div className="rounded-2xl border border-border bg-card p-12 text-center text-muted-foreground">{t(locale, "الطالب غير موجود", "Student not found")}</div>;
+  if (loading) {
+    return (
+      <LoadingState
+        titleAr="جارِ تحميل بيانات الطالب"
+        titleEn="Loading student details"
+        descriptionAr="يتم الآن تجهيز ملف الطالب وربط بياناته الأكاديمية والمالية."
+        descriptionEn="The student profile is being prepared with academic and payment details."
+      />
+    );
+  }
+
+  if (!student) {
+    return (
+      <PageStateCard
+        variant="warning"
+        titleAr="الطالب غير موجود"
+        titleEn="Student not found"
+        descriptionAr="قد يكون هذا الملف محذوفًا أو أن الرابط غير صحيح. ارجع إلى قائمة الطلاب ثم اختر الملف الصحيح."
+        descriptionEn="This student profile may have been removed or the link is incorrect. Go back to the students list and open the correct record."
+        actionHref="/students"
+        actionLabelAr="العودة إلى الطلاب"
+        actionLabelEn="Back to students"
+      />
+    );
+  }
 
   const status = STUDENT_STATUS_META[student.status];
 

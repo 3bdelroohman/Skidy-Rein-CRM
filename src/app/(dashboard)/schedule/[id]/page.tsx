@@ -11,6 +11,7 @@ import { getScheduleSessionById } from "@/services/schedule.service";
 import { listStudents } from "@/services/students.service";
 import { useUIStore } from "@/stores/ui-store";
 import type { ScheduleSessionItem, StudentListItem } from "@/types/crm";
+import { LoadingState, PageStateCard } from "@/components/shared/page-state";
 
 export default function ScheduleSessionDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -44,17 +45,28 @@ export default function ScheduleSessionDetailsPage({ params }: { params: Promise
   }, [session, students]);
 
   if (loading) {
-    return <div className="rounded-2xl border border-border bg-card p-12 text-center text-muted-foreground">{t(locale, "جارِ تحميل الجلسة...", "Loading session...")}</div>;
+    return (
+      <LoadingState
+        titleAr="جارِ تحميل الجلسة"
+        titleEn="Loading session"
+        descriptionAr="يتم الآن تجهيز بيانات الكلاس والطلاب المرتبطين بهذه الجلسة."
+        descriptionEn="The class session and linked students are being prepared."
+      />
+    );
   }
 
   if (!session) {
     return (
-      <div className="rounded-2xl border border-border bg-card p-12 text-center text-muted-foreground">
-        <p>{t(locale, "الجلسة غير موجودة", "Session not found")}</p>
-        <button onClick={() => router.push("/schedule")} className="mt-4 text-sm font-semibold text-brand-600 hover:underline">
-          {t(locale, "العودة للجدول", "Back to schedule")}
-        </button>
-      </div>
+      <PageStateCard
+        variant="warning"
+        titleAr="الجلسة غير موجودة"
+        titleEn="Session not found"
+        descriptionAr="قد يكون رابط الجلسة غير صحيح أو أن هذه الحصة لم تعد موجودة في الجدول."
+        descriptionEn="The session link may be incorrect or this class no longer exists in the schedule."
+        actionHref="/schedule"
+        actionLabelAr="العودة إلى الجدول"
+        actionLabelEn="Back to schedule"
+      />
     );
   }
 

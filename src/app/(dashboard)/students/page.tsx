@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { listStudents } from "@/services/students.service";
 import type { StudentListItem } from "@/types/crm";
 import type { StudentStatus } from "@/types/common.types";
+import { EmptySearchState, LoadingState } from "@/components/shared/page-state";
 
 export default function StudentsPage() {
   const locale = useUIStore((state) => state.locale);
@@ -68,7 +69,12 @@ export default function StudentsPage() {
       </div>
 
       {loading ? (
-        <div className="rounded-2xl border border-border bg-card p-12 text-center text-muted-foreground">{t(locale, "جارِ تحميل الطلاب...", "Loading students...")}</div>
+        <LoadingState
+          titleAr="جارِ تحميل الطلاب"
+          titleEn="Loading students"
+          descriptionAr="يتم الآن تجهيز ملفات الطلاب والحالات الدراسية المرتبطة بهم."
+          descriptionEn="Student records and related statuses are being prepared."
+        />
       ) : (
         <div className="overflow-hidden rounded-2xl border border-border bg-card">
           <div className="overflow-x-auto">
@@ -107,7 +113,7 @@ export default function StudentsPage() {
               </tbody>
             </table>
           </div>
-          {!loading && filtered.length === 0 && <div className="py-12 text-center text-muted-foreground">{t(locale, "لا يوجد طلاب مطابقون للفلاتر الحالية", "No students match the current filters")}</div>}
+          {!loading && filtered.length === 0 && <EmptySearchState />}
         </div>
       )}
     </div>

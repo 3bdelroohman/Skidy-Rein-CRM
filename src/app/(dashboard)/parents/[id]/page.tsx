@@ -7,6 +7,7 @@ import { useUIStore } from "@/stores/ui-store";
 import { t } from "@/lib/locale";
 import { getParentById } from "@/services/parents.service";
 import { listStudents } from "@/services/students.service";
+import { LoadingState, PageStateCard } from "@/components/shared/page-state";
 import type { ParentListItem, StudentListItem } from "@/types/crm";
 
 export default function ParentDetailsPage({ params }: { params: Promise<{ id: string }> }) {
@@ -36,8 +37,31 @@ export default function ParentDetailsPage({ params }: { params: Promise<{ id: st
     return students.filter((student) => student.parentPhone === parent.phone || student.parentName === parent.fullName);
   }, [parent, students]);
 
-  if (loading) return <div className="rounded-2xl border border-border bg-card p-12 text-center text-muted-foreground">{t(locale, "جارِ تحميل بيانات ولي الأمر...", "Loading parent details...")}</div>;
-  if (!parent) return <div className="rounded-2xl border border-border bg-card p-12 text-center text-muted-foreground">{t(locale, "ولي الأمر غير موجود", "Parent not found")}</div>;
+  if (loading) {
+    return (
+      <LoadingState
+        titleAr="جارِ تحميل بيانات ولي الأمر"
+        titleEn="Loading parent details"
+        descriptionAr="يتم الآن تجهيز بيانات التواصل وربط الأطفال المرتبطين بهذا الملف."
+        descriptionEn="Contact details and linked children are being prepared for this profile."
+      />
+    );
+  }
+
+  if (!parent) {
+    return (
+      <PageStateCard
+        variant="warning"
+        titleAr="ولي الأمر غير موجود"
+        titleEn="Parent not found"
+        descriptionAr="قد يكون الملف غير متاح أو أن الرابط لم يعد صالحًا. ارجع إلى قائمة أولياء الأمور واختر الملف الصحيح."
+        descriptionEn="This parent profile may be unavailable or the link is no longer valid. Go back to the parents list and open the correct record."
+        actionHref="/parents"
+        actionLabelAr="العودة إلى أولياء الأمور"
+        actionLabelEn="Back to parents"
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">

@@ -12,6 +12,7 @@ import { getPaymentById, updatePaymentStatus } from "@/services/payments.service
 import { useUIStore } from "@/stores/ui-store";
 import type { PaymentItem } from "@/types/crm";
 import type { PaymentMethod, PaymentStatus } from "@/types/common.types";
+import { LoadingState, PageStateCard } from "@/components/shared/page-state";
 
 const STATUS_META: Record<PaymentStatus, { bg: string; color: string }> = {
   paid: { bg: "#ECFDF5", color: "#059669" },
@@ -64,17 +65,28 @@ export default function PaymentDetailsPage({ params }: { params: Promise<{ id: s
   }
 
   if (loading) {
-    return <div className="rounded-2xl border border-border bg-card p-12 text-center text-muted-foreground">{t(locale, "جارِ تحميل بيانات الدفعة...", "Loading payment details...")}</div>;
+    return (
+      <LoadingState
+        titleAr="جارِ تحميل بيانات الدفعة"
+        titleEn="Loading payment details"
+        descriptionAr="يتم الآن تجهيز تفاصيل السداد والحالة الحالية للدفعة."
+        descriptionEn="Payment details and the current collection status are being prepared."
+      />
+    );
   }
 
   if (!payment) {
     return (
-      <div className="rounded-2xl border border-border bg-card p-12 text-center text-muted-foreground">
-        <p>{t(locale, "الدفعة غير موجودة", "Payment not found")}</p>
-        <button onClick={() => router.push("/payments")} className="mt-4 text-sm font-semibold text-brand-600 hover:underline">
-          {t(locale, "العودة للمدفوعات", "Back to payments")}
-        </button>
-      </div>
+      <PageStateCard
+        variant="warning"
+        titleAr="الدفعة غير موجودة"
+        titleEn="Payment not found"
+        descriptionAr="قد تكون هذه الدفعة محذوفة أو أن الرابط غير صحيح. ارجع إلى صفحة المدفوعات ثم اختر السجل الصحيح."
+        descriptionEn="This payment may have been removed or the link is incorrect. Go back to the payments page and open the correct record."
+        actionHref="/payments"
+        actionLabelAr="العودة إلى المدفوعات"
+        actionLabelEn="Back to payments"
+      />
     );
   }
 

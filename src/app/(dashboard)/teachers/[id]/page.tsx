@@ -8,6 +8,7 @@ import { formatCourseLabel } from "@/lib/formatters";
 import { getEmploymentTypeLabel, t } from "@/lib/locale";
 import { getTeacherById } from "@/services/teachers.service";
 import { listScheduleSessions } from "@/services/schedule.service";
+import { LoadingState, PageStateCard } from "@/components/shared/page-state";
 import type { ScheduleSessionItem, TeacherListItem } from "@/types/crm";
 
 function sameTeacher(sessionTeacher: string, teacherName: string): boolean {
@@ -41,8 +42,31 @@ export default function TeacherDetailsPage({ params }: { params: Promise<{ id: s
     return sessions.filter((session) => sameTeacher(session.teacher, teacher.fullName));
   }, [sessions, teacher]);
 
-  if (loading) return <div className="rounded-2xl border border-border bg-card p-12 text-center text-muted-foreground">{t(locale, "جارِ تحميل بيانات المدرس...", "Loading teacher details...")}</div>;
-  if (!teacher) return <div className="rounded-2xl border border-border bg-card p-12 text-center text-muted-foreground">{t(locale, "المدرس غير موجود", "Teacher not found")}</div>;
+  if (loading) {
+    return (
+      <LoadingState
+        titleAr="جارِ تحميل بيانات المدرس"
+        titleEn="Loading teacher details"
+        descriptionAr="يتم الآن تجهيز ملف المدرس وربط الجلسات المرتبطة به."
+        descriptionEn="The teacher profile is being prepared with linked sessions and classes."
+      />
+    );
+  }
+
+  if (!teacher) {
+    return (
+      <PageStateCard
+        variant="warning"
+        titleAr="المدرس غير موجود"
+        titleEn="Teacher not found"
+        descriptionAr="قد يكون هذا الملف محذوفًا أو أن الرابط غير صحيح. ارجع إلى قائمة المدرسين ثم افتح الملف الصحيح."
+        descriptionEn="This teacher profile may have been removed or the link is incorrect. Go back to the teachers list and open the correct record."
+        actionHref="/teachers"
+        actionLabelAr="العودة إلى المدرسين"
+        actionLabelEn="Back to teachers"
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">

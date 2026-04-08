@@ -8,6 +8,7 @@ import { t } from "@/lib/locale";
 import { cn } from "@/lib/utils";
 import { listParents } from "@/services/parents.service";
 import type { ParentListItem } from "@/types/crm";
+import { EmptySearchState, LoadingState } from "@/components/shared/page-state";
 
 export default function ParentsPage() {
   const locale = useUIStore((state) => state.locale);
@@ -58,7 +59,12 @@ export default function ParentsPage() {
       </div>
 
       {loading ? (
-        <div className="rounded-2xl border border-border bg-card p-12 text-center text-muted-foreground">{t(locale, "جارِ تحميل بيانات أولياء الأمور...", "Loading parents...")}</div>
+        <LoadingState
+          titleAr="جارِ تحميل أولياء الأمور"
+          titleEn="Loading parents"
+          descriptionAr="يتم الآن تجهيز بيانات التواصل وربط الملفات العائلية."
+          descriptionEn="Contact details and family relationships are being prepared."
+        />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((parent) => (
@@ -93,7 +99,7 @@ export default function ParentsPage() {
               </div>
             </Link>
           ))}
-          {!loading && filtered.length === 0 && <div className="col-span-full rounded-2xl border border-dashed border-border bg-card p-12 text-center text-muted-foreground">{t(locale, "لا توجد نتائج مطابقة", "No matching results")}</div>}
+          {!loading && filtered.length === 0 && <div className="col-span-full"><EmptySearchState /></div>}
         </div>
       )}
     </div>

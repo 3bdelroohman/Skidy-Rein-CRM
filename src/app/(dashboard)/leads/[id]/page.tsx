@@ -23,6 +23,7 @@ import { useCurrentUser } from "@/providers/user-provider";
 import { useUIStore } from "@/stores/ui-store";
 import { getLeadById, listLeadActivities, updateLeadStage } from "@/services/leads.service";
 import type { LeadActivityItem, LeadListItem } from "@/types/crm";
+import { LoadingState, PageStateCard } from "@/components/shared/page-state";
 
 export default function LeadDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -69,15 +70,28 @@ export default function LeadDetailsPage({ params }: { params: Promise<{ id: stri
   };
 
   if (loading) {
-    return <div className="rounded-2xl border border-border bg-card p-12 text-center text-muted-foreground">{t(locale, "جارِ تحميل بيانات العميل...", "Loading lead details...")}</div>;
+    return (
+      <LoadingState
+        titleAr="جارِ تحميل بيانات العميل"
+        titleEn="Loading lead details"
+        descriptionAr="يتم الآن تجهيز ملف العميل وسجل النشاطات ومسار البيع المرتبط به."
+        descriptionEn="The lead profile, activity log, and sales pipeline are being prepared."
+      />
+    );
   }
 
   if (!lead || !currentStageConfig) {
     return (
-      <div className="flex flex-col items-center justify-center py-20">
-        <p className="text-lg text-muted-foreground">{t(locale, "العميل غير موجود", "Lead not found")}</p>
-        <button onClick={() => router.push("/leads")} className="mt-4 text-sm text-brand-600 hover:underline">{t(locale, "رجوع للقائمة", "Back to leads")}</button>
-      </div>
+      <PageStateCard
+        variant="warning"
+        titleAr="العميل غير موجود"
+        titleEn="Lead not found"
+        descriptionAr="قد يكون هذا الملف محذوفًا أو أن الرابط غير صحيح. ارجع إلى قائمة العملاء المحتملين ثم افتح الملف الصحيح."
+        descriptionEn="This lead may have been removed or the link is incorrect. Go back to the leads list and open the correct record."
+        actionHref="/leads"
+        actionLabelAr="العودة إلى العملاء المحتملين"
+        actionLabelEn="Back to leads"
+      />
     );
   }
 
