@@ -161,6 +161,11 @@ export function LeadForm({
       });
 
       toast.success(successMessage);
+    } catch (error) {
+      const message = error instanceof Error && error.message.trim().length > 0
+        ? error.message
+        : t(locale, "تعذر حفظ العميل. راجع الصلاحيات أو بيانات قاعدة البيانات.", "Failed to save lead. Check permissions or database settings.");
+      toast.error(message);
     } finally {
       setLoading(false);
     }

@@ -248,7 +248,7 @@ export async function listLeadActivities(leadId: string): Promise<LeadActivityIt
 
 export async function createLead(input: CreateLeadInput): Promise<LeadListItem> {
   const createdAt = new Date().toISOString();
-  const lead: LeadListItem = {
+  const draftLead: LeadListItem = {
     id: crypto.randomUUID(),
     childName: input.childName,
     childAge: input.childAge,
@@ -259,7 +259,10 @@ export async function createLead(input: CreateLeadInput): Promise<LeadListItem> 
     source: input.source,
     suggestedCourse: input.suggestedCourse,
     assignedTo: input.assignedTo,
-    assignedToName: input.assignedToName || MOCK_TEAM.find((member) => member.id === input.assignedTo)?.name || "غير مخصص",
+    assignedToName:
+      input.assignedToName ||
+      MOCK_TEAM.find((member) => member.id === input.assignedTo)?.name ||
+      "غير مخصص",
     lastContactAt: null,
     nextFollowUpAt: null,
     notes: input.notes ?? null,
@@ -267,57 +270,77 @@ export async function createLead(input: CreateLeadInput): Promise<LeadListItem> 
     lossReason: null,
   };
 
-  const current = getLocalLeads();
-  saveLocalLeads([lead, ...current]);
-
-  const newActivity: LeadActivityItem = {
-    id: crypto.randomUUID(),
-    leadId: lead.id,
-    action: "تم إنشاء العميل المحتمل",
-    date: createdAt,
-    by: lead.assignedToName,
-    type: "create",
-  };
-  saveLocalActivities([newActivity, ...getLocalActivities()]);
-
   const supabase = getSupabaseClient();
+
   if (!supabase) {
-    if (shouldUseDemoFallback()) return lead;
-    throw new Error("Supabase client is not available");
+    if (!shouldUseDemoFallback()) {
+      throw new Error("تعذر الاتصال بقاعدة البيانات. أعد المحاولة بعد تسجيل الدخول أو التحقق من الإعدادات.");
+    }
+
+    const current = getLocalLeads();
+    saveLocalLeads([draftLead, ...current]);
+
+    const demoActivity: LeadActivityItem = {
+      id: crypto.randomUUID(),
+      leadId: draftLead.id,
+      action: "تم إنشاء العميل المحتمل",
+      date: createdAt,
+      by: draftLead.assignedToName,
+      type: "create",
+    };
+    saveLocalActivities([demoActivity, ...getLocalActivities()]);
+
+    return draftLead;
   }
 
   try {
     const { data, error } = await supabase
       .from("leads")
       .insert({
-        parent_name: lead.parentName,
-        parent_phone: lead.parentPhone,
-        child_name: lead.childName,
-        child_age: lead.childAge,
-        stage: lead.stage,
-        temperature: lead.temperature,
-        source: lead.source,
-        suggested_course: lead.suggestedCourse,
-        assigned_to: lead.assignedTo,
-        assigned_to_name: lead.assignedToName,
-        notes: lead.notes,
-        created_at: lead.createdAt,
+        parent_name: draftLead.parentName,
+        parent_phone: draftLead.parentPhone,
+        child_name: draftLead.childName,
+        child_age: draftLead.childAge,
+        stage: draftLead.stage,
+        temperature: draftLead.temperature,
+        source: draftLead.source,
+        suggested_course: draftLead.suggestedCourse,
+        assigned_to: draftLead.assignedTo,
+        assigned_to_name: draftLead.assignedToName,
+        notes: draftLead.notes,
+        created_at: draftLead.createdAt,
       })
       .select("*")
-      .maybeSingle();
+      .single();
 
-    if (!error && data) {
-      const synced = mapLeadRow(data);
-      saveLocalLeads([synced, ...current.filter((item) => item.id !== lead.id)]);
-      return synced;
+    if (error) {
+      console.error("[leads] create failed", error);
+      throw new Error(error.message || "تعذر حفظ العميل في قاعدة البيانات");
     }
+
+    if (!data) {
+      throw new Error("تم إرسال طلب الحفظ لكن لم يرجع أي سجل من قاعدة البيانات");
+    }
+
+    const synced = mapLeadRow(data);
+    const current = getLocalLeads().filter((item) => item.id !== synced.id);
+    saveLocalLeads([synced, ...current]);
+
+    const newActivity: LeadActivityItem = {
+      id: crypto.randomUUID(),
+      leadId: synced.id,
+      action: "تم إنشاء العميل المحتمل",
+      date: createdAt,
+      by: synced.assignedToName,
+      type: "create",
+    };
+    saveLocalActivities([newActivity, ...getLocalActivities().filter((item) => item.leadId !== synced.id || item.type !== "create")]);
+
+    return synced;
   } catch (error) {
     console.error("[leads] create failed", error);
-    if (shouldUseDemoFallback()) return lead;
-    throw error instanceof Error ? error : new Error("Failed to create lead");
+    throw error instanceof Error ? error : new Error("تعذر حفظ العميل");
   }
-
-  return lead;
 }
 
 export async function updateLead(
