@@ -36,6 +36,14 @@ function getSupabaseClient() {
   return createBrowserClient<Database>(url, key);
 }
 
+function isDemoModeEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_ALLOW_DEMO_FALLBACK === "true";
+}
+
+function shouldUseDemoFallback(): boolean {
+  return !getSupabaseClient() && isDemoModeEnabled();
+}
+
 function asString(value: unknown, fallback = ""): string {
   return typeof value === "string" && value.trim().length > 0 ? value : fallback;
 }
@@ -107,6 +115,10 @@ function saveLocalPayments(items: PaymentItem[]): void {
   writeStorage(PAYMENTS_KEY, sortPayments(items));
 }
 
+function clearLocalPayments(): void {
+  writeStorage(PAYMENTS_KEY, []);
+}
+
 function generateInvoiceNumber(existing: PaymentItem[]): string {
   const year = new Date().getFullYear();
   return `SKR-${year}-${String(existing.length + 1).padStart(4, "0")}`;
@@ -157,9 +169,9 @@ async function buildMaps() {
 }
 
 export async function listPayments(): Promise<PaymentItem[]> {
-  const fallback = getLocalPayments();
+  const demoFallback = shouldUseDemoFallback() ? getLocalPayments() : [];
   const supabase = getSupabaseClient();
-  if (!supabase) return fallback;
+  if (!supabase) return demoFallback;
 
   try {
     const [{ data, error }, { studentsMap, parentsMap }] = await Promise.all([
@@ -167,13 +179,22 @@ export async function listPayments(): Promise<PaymentItem[]> {
       buildMaps(),
     ]);
 
-    if (error || !data || data.length === 0) return fallback;
+    if (error) {
+      console.error("[payments] failed to load from Supabase", error);
+      return [];
+    }
+
+    if (!data || data.length === 0) {
+      clearLocalPayments();
+      return [];
+    }
 
     const mapped = data.map((row) => mapPaymentRow(row, studentsMap, parentsMap));
     saveLocalPayments(mapped);
     return mapped;
-  } catch {
-    return fallback;
+  } catch (error) {
+    console.error("[payments] unexpected load failure", error);
+    return [];
   }
 }
 
@@ -252,26 +273,30 @@ export async function createPayment(input: CreatePaymentInput): Promise<PaymentI
     invoiceIssuedAt: now,
   };
 
-  saveLocalPayments([payment, ...current]);
-
   const supabase = getSupabaseClient();
-  if (supabase) {
-    try {
-      await supabase.from("payments").insert({
-        id: paymentId,
-        student_id: input.studentId,
-        amount: input.amount,
-        status: input.status,
-        method: input.method,
-        due_date: input.dueDate,
-        paid_at: payment.paidAt,
-        notes,
-      });
-    } catch {
-      // local fallback remains authoritative for demo mode
-    }
+  if (!supabase) {
+    const localCurrent = getLocalPayments();
+    saveLocalPayments([payment, ...localCurrent]);
+    return payment;
   }
 
+  const { error } = await supabase.from("payments").insert({
+    id: paymentId,
+    student_id: input.studentId,
+    amount: input.amount,
+    status: input.status,
+    method: input.method,
+    due_date: input.dueDate,
+    paid_at: payment.paidAt,
+    notes,
+  });
+
+  if (error) {
+    console.error("[payments] create failed", error);
+    throw new Error(error.message || "Failed to create payment");
+  }
+
+  saveLocalPayments([payment, ...current]);
   return payment;
 }
 
@@ -304,27 +329,30 @@ export async function updatePaymentStatus(id: string, status: PaymentStatus, met
     } satisfies PaymentItem;
   });
 
-  saveLocalPayments(updatedItems);
-
+  const nextItem = updatedItems.find((payment) => payment.id === id) ?? null;
   const supabase = getSupabaseClient();
-  if (supabase) {
-    try {
-      const updated = updatedItems.find((payment) => payment.id === id) ?? null;
-      await supabase
-        .from("payments")
-        .update({
-          status,
-          method: nextMethod,
-          paid_at: nextPaidAt,
-          notes: updated?.notes ?? existing.notes ?? null,
-        })
-        .eq("id", id);
-    } catch {
-      // keep local fallback as safe demo mode
-    }
+  if (!supabase) {
+    saveLocalPayments(updatedItems);
+    return nextItem;
   }
 
-  return updatedItems.find((payment) => payment.id === id) ?? null;
+  const { error } = await supabase
+    .from("payments")
+    .update({
+      status,
+      method: nextMethod,
+      paid_at: nextPaidAt,
+      notes: nextItem?.notes ?? existing.notes ?? null,
+    })
+    .eq("id", id);
+
+  if (error) {
+    console.error("[payments] status update failed", error);
+    throw new Error(error.message || "Failed to update payment status");
+  }
+
+  saveLocalPayments(updatedItems);
+  return nextItem;
 }
 
 export function buildInvoiceShareMessage(payment: PaymentItem, locale: "ar" | "en" = "ar"): string {
@@ -350,11 +378,10 @@ export function buildInvoiceShareMessage(payment: PaymentItem, locale: "ar" | "e
     `Due date: ${payment.dueDate.slice(0, 10)}`,
     payment.deferredUntil ? `Deferred until: ${payment.deferredUntil.slice(0, 10)}` : null,
     `Skidy Rein`,
-    ].filter(Boolean).join("\n");
+  ].filter(Boolean).join("\n");
 }
 
 export async function getPaymentsSummary() {
-
   const payments = await listPayments();
   const totalExpected = payments.reduce((sum, payment) => sum + payment.amount, 0);
   const totalCollected = payments
