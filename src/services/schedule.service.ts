@@ -26,6 +26,14 @@ function getSupabaseClient() {
   return createBrowserClient<Database>(url, key);
 }
 
+function isDemoModeEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_ALLOW_DEMO_FALLBACK === "true";
+}
+
+function shouldUseDemoFallback(): boolean {
+  return !getSupabaseClient() && isDemoModeEnabled();
+}
+
 function sortSessions(items: ScheduleSessionItem[]): ScheduleSessionItem[] {
   return [...items].sort((a, b) => {
     if (a.day !== b.day) return a.day - b.day;
@@ -50,6 +58,19 @@ function asNumber(value: unknown, fallback = 0): number {
   return fallback;
 }
 
+function readRecordValue(record: unknown, keys: string[]): unknown {
+  if (!record || typeof record !== "object") return undefined;
+  const objectRecord = record as Record<string, unknown>;
+  for (const key of keys) {
+    if (key in objectRecord) return objectRecord[key];
+  }
+  return undefined;
+}
+
+function readDayValue(record: unknown, fallback = 0): number {
+  return asNumber(readRecordValue(record, ["day_of_week", "weekday", "day"]), fallback);
+}
+
 function asCourse(value: unknown, fallback: CourseType = "scratch"): CourseType {
   return VALID_COURSES.includes(value as CourseType) ? (value as CourseType) : fallback;
 }
@@ -64,11 +85,16 @@ function normalizeName(value: string | null | undefined): string {
 }
 
 function getLocalSchedule(): ScheduleSessionItem[] {
-  return sortSessions(readStorage(SCHEDULE_KEY, DEFAULT_SCHEDULE));
+  const seed = shouldUseDemoFallback() ? DEFAULT_SCHEDULE : ([] as ScheduleSessionItem[]);
+  return sortSessions(readStorage(SCHEDULE_KEY, seed));
 }
 
 function saveLocalSchedule(items: ScheduleSessionItem[]): void {
   writeStorage(SCHEDULE_KEY, sortSessions(items));
+}
+
+function clearLocalSchedule(): void {
+  writeStorage(SCHEDULE_KEY, []);
 }
 
 function inferTeacher(
@@ -100,7 +126,7 @@ function mapSessionFromClass(
     id: asString(row.id, crypto.randomUUID()),
     classId: asNullableString(row.id),
     teacherId: asNullableString(row.teacher_id),
-    day: asNumber(row.day_of_week, 0),
+    day: readDayValue(row, 0),
     startTime: asString(row.start_time, "16:00"),
     endTime: asString(row.end_time, "17:00"),
     className: asString(row.name, "Class"),
@@ -123,7 +149,7 @@ function mapSessionFromSessionRow(
     id: asString(row.id, crypto.randomUUID()),
     classId: asNullableString(row.class_id),
     teacherId: asNullableString(row.teacher_id ?? classRow?.teacher_id),
-    day: asNumber(row.day_of_week ?? classRow?.day_of_week, 0),
+    day: readDayValue(row, readDayValue(classRow, 0)),
     startTime: asString(row.start_time ?? classRow?.start_time, "16:00"),
     endTime: asString(row.end_time ?? classRow?.end_time, "17:00"),
     className: asString(row.title ?? classRow?.name, "Session"),
@@ -141,13 +167,14 @@ async function buildStudentsTeachersParents() {
 
 export async function listScheduleSessions(): Promise<ScheduleSessionItem[]> {
   const local = getLocalSchedule();
+  const demoFallback = shouldUseDemoFallback() ? (local.length > 0 ? local : DEFAULT_SCHEDULE) : [];
   const supabase = getSupabaseClient();
-  if (!supabase) return local.length > 0 ? local : DEFAULT_SCHEDULE;
+  if (!supabase) return demoFallback;
 
   try {
     const [{ students, teachers }, classesResponse, sessionsResponse, enrollmentsResponse] = await Promise.all([
       buildStudentsTeachersParents(),
-      supabase.from("classes").select("*").order("day_of_week", { ascending: true }),
+      supabase.from("classes").select("*"),
       supabase.from("sessions").select("*").order("session_date", { ascending: false }),
       supabase.from("class_enrollments").select("*"),
     ]);
@@ -156,8 +183,15 @@ export async function listScheduleSessions(): Promise<ScheduleSessionItem[]> {
     const sessionRows = sessionsResponse.data ?? [];
     const enrollmentRows = enrollmentsResponse.data ?? [];
 
-    if ((classesResponse.error && sessionsResponse.error) || (classesRows.length === 0 && sessionRows.length === 0)) {
-      return local.length > 0 ? local : DEFAULT_SCHEDULE;
+    if (classesResponse.error || sessionsResponse.error || enrollmentsResponse.error) {
+      console.error("[schedule] failed to load from Supabase", classesResponse.error || sessionsResponse.error || enrollmentsResponse.error);
+      clearLocalSchedule();
+      return [];
+    }
+
+    if (classesRows.length === 0 && sessionRows.length === 0) {
+      clearLocalSchedule();
+      return [];
     }
 
     const enrollmentCountByClassId = new Map<string, number>();
@@ -183,8 +217,10 @@ export async function listScheduleSessions(): Promise<ScheduleSessionItem[]> {
     const merged = sortSessions([...mappedFromSessions, ...mappedStandaloneClasses]);
     saveLocalSchedule(merged);
     return merged;
-  } catch {
-    return local.length > 0 ? local : DEFAULT_SCHEDULE;
+  } catch (error) {
+    console.error("[schedule] unexpected load failure", error);
+    clearLocalSchedule();
+    return [];
   }
 }
 

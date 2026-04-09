@@ -31,6 +31,14 @@ function getSupabaseClient() {
   return createBrowserClient<Database>(url, key);
 }
 
+function isDemoModeEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_ALLOW_DEMO_FALLBACK === "true";
+}
+
+function shouldUseDemoFallback(): boolean {
+  return !getSupabaseClient() && isDemoModeEnabled();
+}
+
 function mockFollowUps(): FollowUpItem[] {
   return MOCK_FOLLOW_UPS.map((item) => ({ ...item }));
 }
@@ -80,11 +88,16 @@ function mapRow(row: Database["public"]["Tables"]["follow_ups"]["Row"] | Record<
 }
 
 function getLocalFollowUps(): FollowUpItem[] {
-  return sortByDateAsc(readStorage(FOLLOW_UPS_KEY, mockFollowUps()), (item) => item.scheduledAt);
+  const seed = shouldUseDemoFallback() ? mockFollowUps() : ([] as FollowUpItem[]);
+  return sortByDateAsc(readStorage(FOLLOW_UPS_KEY, seed), (item) => item.scheduledAt);
 }
 
 function saveLocalFollowUps(items: FollowUpItem[]): void {
   writeStorage(FOLLOW_UPS_KEY, sortByDateAsc(items, (item) => item.scheduledAt));
+}
+
+function clearLocalFollowUps(): void {
+  writeStorage(FOLLOW_UPS_KEY, []);
 }
 
 function getLocalLeads(): LeadListItem[] {
@@ -168,9 +181,9 @@ async function syncLeadNextFollowUp(leadId: string | null | undefined, items: Fo
 }
 
 export async function listFollowUps(): Promise<FollowUpItem[]> {
-  const fallback = getLocalFollowUps();
+  const demoFallback = shouldUseDemoFallback() ? getLocalFollowUps() : [];
   const supabase = getSupabaseClient();
-  if (!supabase) return fallback;
+  if (!supabase) return demoFallback;
 
   try {
     const { data, error } = await supabase
@@ -178,20 +191,31 @@ export async function listFollowUps(): Promise<FollowUpItem[]> {
       .select("*")
       .order("scheduled_at", { ascending: true });
 
-    if (error || !data || data.length === 0) return fallback;
+    if (error) {
+      console.error("[follow-ups] failed to load from Supabase", error);
+      clearLocalFollowUps();
+      return [];
+    }
+
+    if (!data || data.length === 0) {
+      clearLocalFollowUps();
+      return [];
+    }
 
     const mapped = data.map((row: Database["public"]["Tables"]["follow_ups"]["Row"]) => mapRow(row));
     saveLocalFollowUps(mapped);
     return mapped;
-  } catch {
-    return fallback;
+  } catch (error) {
+    console.error("[follow-ups] unexpected load failure", error);
+    clearLocalFollowUps();
+    return [];
   }
 }
 
 export async function listFollowUpsByLead(leadId: string): Promise<FollowUpItem[]> {
-  const fallback = getLocalFollowUps().filter((item) => item.leadId === leadId);
+  const demoFallback = shouldUseDemoFallback() ? getLocalFollowUps().filter((item) => item.leadId === leadId) : [];
   const supabase = getSupabaseClient();
-  if (!supabase) return fallback;
+  if (!supabase) return demoFallback;
 
   try {
     const { data, error } = await supabase
@@ -200,14 +224,26 @@ export async function listFollowUpsByLead(leadId: string): Promise<FollowUpItem[
       .eq("lead_id", leadId)
       .order("scheduled_at", { ascending: true });
 
-    if (error || !data) return fallback;
+    if (error) {
+      console.error("[follow-ups] failed to load lead follow-ups", error);
+      const rest = getLocalFollowUps().filter((item) => item.leadId !== leadId);
+      saveLocalFollowUps(rest);
+      return [];
+    }
+
+    if (!data || data.length === 0) {
+      const rest = getLocalFollowUps().filter((item) => item.leadId !== leadId);
+      saveLocalFollowUps(rest);
+      return [];
+    }
 
     const mapped = data.map((row: Database["public"]["Tables"]["follow_ups"]["Row"]) => mapRow(row));
     const rest = getLocalFollowUps().filter((item) => item.leadId !== leadId);
     saveLocalFollowUps([...rest, ...mapped]);
     return mapped;
-  } catch {
-    return fallback;
+  } catch (error) {
+    console.error("[follow-ups] unexpected lead follow-ups failure", error);
+    return [];
   }
 }
 
@@ -236,7 +272,10 @@ export async function createFollowUp(input: CreateFollowUpInput): Promise<Follow
   await syncLeadNextFollowUp(item.leadId, next);
 
   const supabase = getSupabaseClient();
-  if (!supabase) return item;
+  if (!supabase) {
+    if (shouldUseDemoFallback()) return item;
+    throw new Error("Supabase client is not available");
+  }
 
   try {
     const { data, error } = await supabase
@@ -263,8 +302,10 @@ export async function createFollowUp(input: CreateFollowUpInput): Promise<Follow
       await syncLeadNextFollowUp(item.leadId, merged);
       return synced;
     }
-  } catch {
-    // local fallback remains active
+  } catch (error) {
+    console.error("[follow-ups] create failed", error);
+    if (shouldUseDemoFallback()) return item;
+    throw error instanceof Error ? error : new Error("Failed to create follow-up");
   }
 
   return item;
@@ -293,7 +334,10 @@ async function updateFollowUpStatus(
   await syncLeadNextFollowUp(updated.leadId, merged);
 
   const supabase = getSupabaseClient();
-  if (!supabase) return updated;
+  if (!supabase) {
+    if (shouldUseDemoFallback()) return updated;
+    throw new Error("Supabase client is not available");
+  }
 
   try {
     await supabase
@@ -303,8 +347,10 @@ async function updateFollowUpStatus(
         completed_at: nextStatus === "completed" ? new Date().toISOString() : null,
       })
       .eq("id", id);
-  } catch {
-    // local state remains source of truth in fallback mode
+  } catch (error) {
+    console.error("[follow-ups] status update failed", error);
+    if (shouldUseDemoFallback()) return updated;
+    throw error instanceof Error ? error : new Error("Failed to update follow-up status");
   }
 
   return updated;

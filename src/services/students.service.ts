@@ -15,6 +15,15 @@ function getSupabaseClient() {
   return createBrowserClient<Database>(url, key);
 }
 
+
+function isDemoModeEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_ALLOW_DEMO_FALLBACK === "true";
+}
+
+function shouldUseDemoFallback(): boolean {
+  return !getSupabaseClient() && isDemoModeEnabled();
+}
+
 function mockStudents(): StudentListItem[] {
   return MOCK_STUDENTS.map((student) => ({ ...student, parentId: null }));
 }
@@ -61,17 +70,22 @@ function mapRow(row: Database["public"]["Tables"]["students"]["Row"] | Record<st
 }
 
 function getLocalStudents(): StudentListItem[] {
-  return sortByDateDesc(readStorage(STUDENTS_KEY, mockStudents()), (student) => student.enrollmentDate);
+  const seed = shouldUseDemoFallback() ? mockStudents() : ([] as StudentListItem[]);
+  return sortByDateDesc(readStorage(STUDENTS_KEY, seed), (student) => student.enrollmentDate);
 }
 
 function saveLocalStudents(students: StudentListItem[]): void {
   writeStorage(STUDENTS_KEY, sortByDateDesc(students, (student) => student.enrollmentDate));
 }
 
+function clearLocalStudents(): void {
+  writeStorage(STUDENTS_KEY, []);
+}
+
 export async function listStudents(): Promise<StudentListItem[]> {
-  const fallback = getLocalStudents();
+  const demoFallback = shouldUseDemoFallback() ? getLocalStudents() : [];
   const supabase = getSupabaseClient();
-  if (!supabase) return fallback;
+  if (!supabase) return demoFallback;
 
   try {
     const { data, error } = await supabase
@@ -79,13 +93,24 @@ export async function listStudents(): Promise<StudentListItem[]> {
       .select("*")
       .order("enrollment_date", { ascending: false });
 
-    if (error || !data || data.length === 0) return fallback;
+    if (error) {
+      console.error("[students] failed to load from Supabase", error);
+      clearLocalStudents();
+      return [];
+    }
+
+    if (!data || data.length === 0) {
+      clearLocalStudents();
+      return [];
+    }
 
     const mapped = data.map((row: Database["public"]["Tables"]["students"]["Row"]) => mapRow(row));
     saveLocalStudents(mapped);
     return mapped;
-  } catch {
-    return fallback;
+  } catch (error) {
+    console.error("[students] unexpected load failure", error);
+    clearLocalStudents();
+    return [];
   }
 }
 

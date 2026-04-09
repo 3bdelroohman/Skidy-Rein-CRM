@@ -45,6 +45,14 @@ function getSupabaseClient() {
   return createBrowserClient<Database>(url, key);
 }
 
+function isDemoModeEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_ALLOW_DEMO_FALLBACK === "true";
+}
+
+function shouldUseDemoFallback(): boolean {
+  return !getSupabaseClient() && isDemoModeEnabled();
+}
+
 function mockLeads(): LeadListItem[] {
   return MOCK_LEADS.map((lead) => ({ ...lead }));
 }
@@ -54,19 +62,29 @@ function mockActivities(): LeadActivityItem[] {
 }
 
 function getLocalLeads(): LeadListItem[] {
-  return sortByDateDesc(readStorage(LEADS_KEY, mockLeads()), (lead) => lead.createdAt);
+  const seed = shouldUseDemoFallback() ? mockLeads() : ([] as LeadListItem[]);
+  return sortByDateDesc(readStorage(LEADS_KEY, seed), (lead) => lead.createdAt);
 }
 
 function saveLocalLeads(leads: LeadListItem[]): void {
   writeStorage(LEADS_KEY, sortByDateDesc(leads, (lead) => lead.createdAt));
 }
 
+function clearLocalLeads(): void {
+  writeStorage(LEADS_KEY, []);
+}
+
 function getLocalActivities(): LeadActivityItem[] {
-  return sortByDateDesc(readStorage(ACTIVITIES_KEY, mockActivities()), (activity) => activity.date);
+  const seed = shouldUseDemoFallback() ? mockActivities() : ([] as LeadActivityItem[]);
+  return sortByDateDesc(readStorage(ACTIVITIES_KEY, seed), (activity) => activity.date);
 }
 
 function saveLocalActivities(activities: LeadActivityItem[]): void {
   writeStorage(ACTIVITIES_KEY, sortByDateDesc(activities, (activity) => activity.date));
+}
+
+function clearLocalActivities(): void {
+  writeStorage(ACTIVITIES_KEY, []);
 }
 
 function asString(value: unknown, fallback = ""): string {
@@ -143,7 +161,16 @@ async function syncLeadsFromSupabase(): Promise<LeadListItem[] | null> {
   if (!supabase) return null;
 
   const { data, error } = await supabase.from("leads").select("*").order("created_at", { ascending: false });
-  if (error || !data || data.length === 0) return null;
+  if (error) {
+    console.error("[leads] failed to load from Supabase", error);
+    clearLocalLeads();
+    return [];
+  }
+
+  if (!data || data.length === 0) {
+    clearLocalLeads();
+    return [];
+  }
 
   const mapped = data.map((row: Database["public"]["Tables"]["leads"]["Row"]) => mapLeadRow(row));
   saveLocalLeads(mapped);
@@ -160,7 +187,18 @@ async function syncActivitiesFromSupabase(leadId: string): Promise<LeadActivityI
     .eq("lead_id", leadId)
     .order("created_at", { ascending: false });
 
-  if (error || !data) return null;
+  if (error) {
+    console.error("[lead_activities] failed to load from Supabase", error);
+    const existing = getLocalActivities().filter((activity) => activity.leadId !== leadId);
+    saveLocalActivities(existing);
+    return [];
+  }
+
+  if (!data || data.length === 0) {
+    const existing = getLocalActivities().filter((activity) => activity.leadId !== leadId);
+    saveLocalActivities(existing);
+    return [];
+  }
 
   const mapped = data.map((row: Database["public"]["Tables"]["lead_activities"]["Row"]) => mapActivityRow(row));
   const existing = getLocalActivities().filter((activity) => activity.leadId !== leadId);
@@ -169,11 +207,13 @@ async function syncActivitiesFromSupabase(leadId: string): Promise<LeadActivityI
 }
 
 export async function listLeads(): Promise<LeadListItem[]> {
-  const fallback = getLocalLeads();
+  const demoFallback = shouldUseDemoFallback() ? getLocalLeads() : [];
   try {
-    return (await syncLeadsFromSupabase()) ?? fallback;
-  } catch {
-    return fallback;
+    return (await syncLeadsFromSupabase()) ?? demoFallback;
+  } catch (error) {
+    console.error("[leads] unexpected load failure", error);
+    clearLocalLeads();
+    return [];
   }
 }
 
@@ -197,11 +237,12 @@ export async function getLeadById(id: string): Promise<LeadListItem | null> {
 }
 
 export async function listLeadActivities(leadId: string): Promise<LeadActivityItem[]> {
-  const fallback = getLocalActivities().filter((activity) => activity.leadId === leadId);
+  const demoFallback = shouldUseDemoFallback() ? getLocalActivities().filter((activity) => activity.leadId === leadId) : [];
   try {
-    return (await syncActivitiesFromSupabase(leadId)) ?? fallback;
-  } catch {
-    return fallback;
+    return (await syncActivitiesFromSupabase(leadId)) ?? demoFallback;
+  } catch (error) {
+    console.error("[lead_activities] unexpected load failure", error);
+    return [];
   }
 }
 
@@ -240,7 +281,10 @@ export async function createLead(input: CreateLeadInput): Promise<LeadListItem> 
   saveLocalActivities([newActivity, ...getLocalActivities()]);
 
   const supabase = getSupabaseClient();
-  if (!supabase) return lead;
+  if (!supabase) {
+    if (shouldUseDemoFallback()) return lead;
+    throw new Error("Supabase client is not available");
+  }
 
   try {
     const { data, error } = await supabase
@@ -267,8 +311,10 @@ export async function createLead(input: CreateLeadInput): Promise<LeadListItem> 
       saveLocalLeads([synced, ...current.filter((item) => item.id !== lead.id)]);
       return synced;
     }
-  } catch {
-    // stay in local fallback mode
+  } catch (error) {
+    console.error("[leads] create failed", error);
+    if (shouldUseDemoFallback()) return lead;
+    throw error instanceof Error ? error : new Error("Failed to create lead");
   }
 
   return lead;
@@ -314,7 +360,10 @@ export async function updateLead(
   saveLocalActivities([activity, ...getLocalActivities()]);
 
   const supabase = getSupabaseClient();
-  if (!supabase) return updated;
+  if (!supabase) {
+    if (shouldUseDemoFallback()) return updated;
+    throw new Error("Supabase client is not available");
+  }
 
   try {
     await supabase
@@ -344,8 +393,10 @@ export async function updateLead(
       by_name: activity.by,
       created_at: activity.date,
     });
-  } catch {
-    // keep local state as source of truth for fallback mode
+  } catch (error) {
+    console.error("[leads] update failed", error);
+    if (shouldUseDemoFallback()) return updated;
+    throw error instanceof Error ? error : new Error("Failed to update lead");
   }
 
   return updated;
@@ -379,7 +430,10 @@ export async function updateLeadStage(
   saveLocalActivities([activity, ...getLocalActivities()]);
 
   const supabase = getSupabaseClient();
-  if (!supabase) return updated;
+  if (!supabase) {
+    if (shouldUseDemoFallback()) return updated;
+    throw new Error("Supabase client is not available");
+  }
 
   try {
     await supabase
@@ -397,8 +451,10 @@ export async function updateLeadStage(
       by_name: activity.by,
       created_at: activity.date,
     });
-  } catch {
-    // keep local state as source of truth for fallback mode
+  } catch (error) {
+    console.error("[leads] stage update failed", error);
+    if (shouldUseDemoFallback()) return updated;
+    throw error instanceof Error ? error : new Error("Failed to update lead stage");
   }
 
   return updated;

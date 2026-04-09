@@ -13,6 +13,15 @@ function getSupabaseClient() {
   return createBrowserClient<Database>(url, key);
 }
 
+
+function isDemoModeEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_ALLOW_DEMO_FALLBACK === "true";
+}
+
+function shouldUseDemoFallback(): boolean {
+  return !getSupabaseClient() && isDemoModeEnabled();
+}
+
 function sortParents(items: ParentListItem[]): ParentListItem[] {
   return [...items].sort((a, b) => a.fullName.localeCompare(b.fullName, "ar"));
 }
@@ -61,17 +70,22 @@ function mapRow(
 }
 
 function getLocalParents(): ParentListItem[] {
-  return sortParents(readStorage(PARENTS_KEY, mockParents()));
+  const seed = shouldUseDemoFallback() ? mockParents() : ([] as ParentListItem[]);
+  return sortParents(readStorage(PARENTS_KEY, seed));
 }
 
 function saveLocalParents(items: ParentListItem[]): void {
   writeStorage(PARENTS_KEY, sortParents(items));
 }
 
+function clearLocalParents(): void {
+  writeStorage(PARENTS_KEY, []);
+}
+
 export async function listParents(): Promise<ParentListItem[]> {
-  const fallback = getLocalParents();
+  const demoFallback = shouldUseDemoFallback() ? getLocalParents() : [];
   const supabase = getSupabaseClient();
-  if (!supabase) return fallback;
+  if (!supabase) return demoFallback;
 
   try {
     const { data, error } = await supabase
@@ -79,13 +93,24 @@ export async function listParents(): Promise<ParentListItem[]> {
       .select("*")
       .order("created_at", { ascending: false });
 
-    if (error || !data || data.length === 0) return fallback;
+    if (error) {
+      console.error("[parents] failed to load from Supabase", error);
+      clearLocalParents();
+      return [];
+    }
+
+    if (!data || data.length === 0) {
+      clearLocalParents();
+      return [];
+    }
 
     const mapped = data.map((row: Database["public"]["Tables"]["parents"]["Row"]) => mapRow(row));
     saveLocalParents(mapped);
     return mapped;
-  } catch {
-    return fallback;
+  } catch (error) {
+    console.error("[parents] unexpected load failure", error);
+    clearLocalParents();
+    return [];
   }
 }
 

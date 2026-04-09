@@ -16,6 +16,15 @@ function getSupabaseClient() {
   return createBrowserClient<Database>(url, key);
 }
 
+
+function isDemoModeEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_ALLOW_DEMO_FALLBACK === "true";
+}
+
+function shouldUseDemoFallback(): boolean {
+  return !getSupabaseClient() && isDemoModeEnabled();
+}
+
 function sortTeachers(items: TeacherListItem[]): TeacherListItem[] {
   return [...items].sort((a, b) => a.fullName.localeCompare(b.fullName, "ar"));
 }
@@ -76,17 +85,22 @@ function mapRow(
 }
 
 function getLocalTeachers(): TeacherListItem[] {
-  return sortTeachers(readStorage(TEACHERS_KEY, mockTeachers()));
+  const seed = shouldUseDemoFallback() ? mockTeachers() : ([] as TeacherListItem[]);
+  return sortTeachers(readStorage(TEACHERS_KEY, seed));
 }
 
 function saveLocalTeachers(items: TeacherListItem[]): void {
   writeStorage(TEACHERS_KEY, sortTeachers(items));
 }
 
+function clearLocalTeachers(): void {
+  writeStorage(TEACHERS_KEY, []);
+}
+
 export async function listTeachers(): Promise<TeacherListItem[]> {
-  const fallback = getLocalTeachers();
+  const demoFallback = shouldUseDemoFallback() ? getLocalTeachers() : [];
   const supabase = getSupabaseClient();
-  if (!supabase) return fallback;
+  if (!supabase) return demoFallback;
 
   try {
     const { data, error } = await supabase
@@ -94,13 +108,24 @@ export async function listTeachers(): Promise<TeacherListItem[]> {
       .select("*")
       .order("created_at", { ascending: false });
 
-    if (error || !data || data.length === 0) return fallback;
+    if (error) {
+      console.error("[teachers] failed to load from Supabase", error);
+      clearLocalTeachers();
+      return [];
+    }
+
+    if (!data || data.length === 0) {
+      clearLocalTeachers();
+      return [];
+    }
 
     const mapped = data.map((row: Database["public"]["Tables"]["teachers"]["Row"]) => mapRow(row));
     saveLocalTeachers(mapped);
     return mapped;
-  } catch {
-    return fallback;
+  } catch (error) {
+    console.error("[teachers] unexpected load failure", error);
+    clearLocalTeachers();
+    return [];
   }
 }
 
