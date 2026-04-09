@@ -308,6 +308,44 @@ export interface ReportsData {
   recommendations: ReportsRecommendationItem[];
 }
 
+
+export type ActionCenterItemCategory = "follow_up" | "lead" | "payment" | "student" | "schedule";
+export type ActionCenterItemPriority = "critical" | "high" | "medium" | "info";
+
+export interface ActionCenterItem {
+  id: string;
+  title: string;
+  description: string;
+  href: string;
+  category: ActionCenterItemCategory;
+  priority: ActionCenterItemPriority;
+  owner?: string;
+  meta?: string;
+}
+
+export interface ActionCenterMetric {
+  label: string;
+  value: string;
+  tone: "danger" | "warning" | "success" | "info" | "brand";
+}
+
+export interface AppNotificationItem {
+  id: string;
+  title: string;
+  timeLabel: string;
+  readDefault?: boolean;
+  href: string;
+  type: "warning" | "info" | "success";
+}
+
+export interface ActionCenterData {
+  metrics: ActionCenterMetric[];
+  critical: ActionCenterItem[];
+  mediumPriority: ActionCenterItem[];
+  informational: ActionCenterItem[];
+  notifications: AppNotificationItem[];
+}
+
 export interface CreateLeadInput {
   childName: string;
   childAge: number;
