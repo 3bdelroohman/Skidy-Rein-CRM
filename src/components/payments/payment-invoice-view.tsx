@@ -143,8 +143,8 @@ Skidy Rein`,
             <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
               <div className="space-y-2">
                 <p className="text-sm text-white/80">Skidy Rein</p>
-                <h1 className="text-3xl font-bold">فاتورة تحصيل</h1>
-                <p className="text-sm text-white/85">أكاديمية برمجة للأطفال — مستند مالي داخلي/للعميل</p>
+                <h1 className="text-3xl font-bold">فاتورة تحصيل — Skidy Rein</h1>
+                <p className="text-sm text-white/85">Skidy Rein • أكاديمية برمجة للأطفال • مستند مالي جاهز للطباعة والإرسال</p>
               </div>
               <div className="rounded-2xl bg-white/10 px-5 py-4 text-sm backdrop-blur">
                 <p className="text-white/75">رقم الفاتورة</p>
@@ -190,7 +190,7 @@ Skidy Rein`,
               <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5">
                 <p className="text-sm text-emerald-700">إجمالي المستحق</p>
                 <p className="mt-2 text-3xl font-bold text-emerald-900">{formatCurrencyEgp(amount)}</p>
-                <p className="mt-2 text-sm text-emerald-800">الفوترة هنا مبنية على باقة من {sessionsCount} جلسات، وليس على شهر ثابت.</p>
+                <p className="mt-2 text-sm text-emerald-800">الفاتورة الحالية مبنية على باقة من {sessionsCount} جلسات، وليس على اشتراك شهري ثابت.</p>
               </div>
 
               <div className="rounded-3xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
@@ -198,6 +198,12 @@ Skidy Rein`,
                 <p className="mt-2 leading-7">
                   يمكن أن تنتهي الباقة خلال شهر واحد أو أكثر من شهر حسب انتظام حضور الجلسات، ويمكن أيضًا تأجيل الدفع بالاتفاق مع ولي الأمر.
                 </p>
+              </div>
+
+              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-700">
+                <p className="font-semibold text-slate-900">Skidy Rein</p>
+                <p className="mt-2 leading-7">للتواصل المالي: 01000000000 — billing@skidyrein.com</p>
+                <p className="mt-1 leading-7">هذه الفاتورة صالحة للحفظ كملف PDF أو مشاركتها مباشرة مع ولي الأمر.</p>
               </div>
             </div>
           </div>

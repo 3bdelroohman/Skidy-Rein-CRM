@@ -140,28 +140,32 @@ export function hasPermission(
   return typeof value === "boolean" ? value : false;
 }
 
-function normalizeIdentity(value: string | null | undefined): string {
-  return (value ?? "")
-    .toLowerCase()
-    .replace(/[ـ\s\-_]+/g, "")
-    .replace(/[آأإ]/g, "ا")
-    .replace(/ة/g, "ه");
-}
-
-export function canManagePaymentsForUser(user: {
-  role: UserRole;
+interface PaymentResponsibleUser {
   email?: string | null;
   fullName?: string | null;
   fullNameAr?: string | null;
-}): boolean {
+  role?: UserRole | null;
+}
+
+function normalizePaymentIdentity(value: string | null | undefined): string {
+  return (value ?? "")
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/[اأإآ]/g, "ا")
+    .replace(/[\-_.]/g, "");
+}
+
+const ALAA_IDENTIFIERS = ["alaa", "alaa", "alaaabdel", "الاء", "الاءاحمد", "آلاء", "الاءمحمد"];
+
+export function canManagePaymentsForUser(user: PaymentResponsibleUser | null | undefined): boolean {
+  if (!user) return false;
   if (user.role === "admin" || user.role === "owner") return true;
   if (user.role !== "sales") return false;
 
-  const emailLocal = normalizeIdentity((user.email ?? "").split("@")[0]);
-  const fullName = normalizeIdentity(user.fullName);
-  const fullNameAr = normalizeIdentity(user.fullNameAr);
+  const candidates = [user.email, user.fullName, user.fullNameAr].map(normalizePaymentIdentity);
+  return ALAA_IDENTIFIERS.some((identifier) => candidates.some((candidate) => candidate.includes(normalizePaymentIdentity(identifier))));
+}
 
-  return [emailLocal, fullName, fullNameAr].some(
-    (value) => value.includes("alaa") || value.includes("الاء") || value.includes("آلاء") || value.includes("علاء"),
-  );
+export function canAccessPaymentsForUser(user: PaymentResponsibleUser | null | undefined): boolean {
+  return canManagePaymentsForUser(user);
 }

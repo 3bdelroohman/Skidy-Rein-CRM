@@ -89,7 +89,7 @@ function parsePaymentMeta(raw: string | null | undefined): { publicNote: string 
 
 function buildPaymentNotes(publicNote: string | null | undefined, meta: PaymentMeta): string {
   const compactMeta: PaymentMeta = {
-    sessionsCovered: meta.sessionsCovered ?? 4,
+    sessionsCovered: normalizeSessionBlock(meta.sessionsCovered ?? 4),
     blockStartDate: meta.blockStartDate ?? null,
     blockEndDate: meta.blockEndDate ?? null,
     deferredUntil: meta.deferredUntil ?? null,
@@ -124,6 +124,24 @@ function generateInvoiceNumber(existing: PaymentItem[]): string {
   return `SKR-${year}-${String(existing.length + 1).padStart(4, "0")}`;
 }
 
+function normalizeSessionBlock(value: number | null | undefined): number {
+  const numeric = typeof value === "number" && Number.isFinite(value) ? value : 4;
+  return Math.max(4, Math.ceil(numeric / 4) * 4);
+}
+
+function getEffectiveDueDate(payment: Pick<PaymentItem, "dueDate" | "deferredUntil">): string {
+  return payment.deferredUntil && payment.deferredUntil.length > 0 ? payment.deferredUntil : payment.dueDate;
+}
+
+function isDeferredPayment(payment: Pick<PaymentItem, "status" | "deferredUntil">): boolean {
+  if (!payment.deferredUntil) return false;
+  return payment.status === "pending" || payment.status === "overdue";
+}
+
+function isPastDate(value: string): boolean {
+  return value.slice(0, 10) < new Date().toISOString().slice(0, 10);
+}
+
 function mapPaymentRow(
   row: Database["public"]["Tables"]["payments"]["Row"] | Record<string, unknown>,
   studentsMap: Map<string, Awaited<ReturnType<typeof listStudents>>[number]>,
@@ -149,7 +167,7 @@ function mapPaymentRow(
     paidAt: asNullableString(record.paid_at ?? record.paidAt),
     notes: rawNotes,
     publicNote,
-    sessionsCovered: meta.sessionsCovered ?? 4,
+    sessionsCovered: normalizeSessionBlock(meta.sessionsCovered ?? 4),
     blockStartDate: meta.blockStartDate ?? null,
     blockEndDate: meta.blockEndDate ?? null,
     deferredUntil: meta.deferredUntil ?? null,
@@ -242,7 +260,7 @@ export async function createPayment(input: CreatePaymentInput): Promise<PaymentI
   const now = new Date().toISOString();
   const paymentId = crypto.randomUUID();
   const invoiceNumber = generateInvoiceNumber(current);
-  const sessionsCovered = Math.max(1, input.sessionsCovered ?? 4);
+  const sessionsCovered = normalizeSessionBlock(input.sessionsCovered ?? 4);
   const notes = buildPaymentNotes(input.notes, {
     sessionsCovered,
     blockStartDate: input.blockStartDate ?? null,
@@ -390,15 +408,42 @@ export async function getPaymentsSummary() {
   const totalOverdue = payments
     .filter((payment) => payment.status === "overdue")
     .reduce((sum, payment) => sum + payment.amount, 0);
-  const dueToday = payments.filter((payment) => payment.dueDate.slice(0, 10) === new Date().toISOString().slice(0, 10)).length;
-  const upcoming = sortByDateAsc(payments.filter((payment) => payment.status === "pending"), (payment) => payment.dueDate).slice(0, 5);
+  const dueToday = payments.filter((payment) => getEffectiveDueDate(payment).slice(0, 10) === new Date().toISOString().slice(0, 10)).length;
+  const deferredCount = payments.filter((payment) => isDeferredPayment(payment) && !isPastDate(getEffectiveDueDate(payment))).length;
+  const upcoming = sortByDateAsc(
+    payments.filter((payment) => {
+      if (payment.status !== "pending" && payment.status !== "overdue") return false;
+      const effectiveDue = getEffectiveDueDate(payment);
+      return effectiveDue.slice(0, 10) >= new Date().toISOString().slice(0, 10);
+    }),
+    (payment) => getEffectiveDueDate(payment),
+  ).slice(0, 5);
 
   return {
     totalExpected,
     totalCollected,
     totalOverdue,
     dueToday,
+    deferredCount,
     collectionRate: totalExpected > 0 ? Math.round((totalCollected / totalExpected) * 100) : 0,
     upcoming,
   };
+}
+
+
+export function getPaymentDisplayState(payment: PaymentItem): "paid" | "pending" | "overdue" | "partial" | "refunded" | "deferred" {
+  if (isDeferredPayment(payment) && !isPastDate(getEffectiveDueDate(payment))) return "deferred";
+  return payment.status;
+}
+
+export function getPaymentEffectiveDueDate(payment: PaymentItem): string {
+  return getEffectiveDueDate(payment);
+}
+
+export function getBillingCycleText(payment: Pick<PaymentItem, "sessionsCovered" | "blockStartDate" | "blockEndDate" | "deferredUntil">, locale: "ar" | "en" = "ar"): string {
+  const sessions = normalizeSessionBlock(payment.sessionsCovered ?? 4);
+  if (locale === "ar") {
+    return `باقة ${sessions} جلسات${payment.deferredUntil ? ` — مؤجلة حتى ${payment.deferredUntil.slice(0,10)}` : ""}`;
+  }
+  return `${sessions}-session billing block${payment.deferredUntil ? ` — deferred until ${payment.deferredUntil.slice(0,10)}` : ""}`;
 }

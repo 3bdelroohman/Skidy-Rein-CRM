@@ -28,7 +28,7 @@ export default function NewPaymentPage() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     studentId: "",
-    amount: "750",
+    amount: "1200",
     status: "pending" as PaymentStatus,
     method: "" as PaymentMethod | "",
     dueDate: new Date().toISOString().slice(0, 10),
@@ -96,7 +96,7 @@ export default function NewPaymentPage() {
         </button>
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground"><ReceiptText size={24} className="text-brand-600" />{t(locale, "إضافة دفعة جديدة", "Add new payment")}</h1>
-          <p className="text-sm text-muted-foreground">{t(locale, "الفوترة هنا مبنية على 4 جلسات، مع إمكانية تأجيل الاستحقاق إذا اتفقتم مع ولي الأمر.", "Billing here is based on a 4-session block, with a flexible deferred due date when needed.")}</p>
+          <p className="text-sm text-muted-foreground">{t(locale, "الفاتورة الافتراضية تغطي 4 جلسات. إذا أردت 8 أو 12 جلسة فاجعل العدد مضاعفًا لـ 4، ويمكنك كذلك تأجيل الاستحقاق عند الاتفاق مع ولي الأمر.", "The default invoice covers 4 sessions. If you need 8 or 12 sessions, use a multiple of 4. You can also defer the due date when agreed with the parent.")}</p>
         </div>
       </div>
 
@@ -116,7 +116,7 @@ export default function NewPaymentPage() {
               <input type="number" min="1" value={form.amount} onChange={(event) => setForm((prev) => ({ ...prev, amount: event.target.value }))} className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground" />
             </Field>
             <Field label={t(locale, "عدد الجلسات", "Sessions covered")}>
-              <input type="number" min="1" value={form.sessionsCovered} onChange={(event) => setForm((prev) => ({ ...prev, sessionsCovered: event.target.value }))} className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground" />
+              <input type="number" min="4" step="4" value={form.sessionsCovered} onChange={(event) => setForm((prev) => ({ ...prev, sessionsCovered: event.target.value }))} className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground" />
             </Field>
           </div>
 
@@ -159,7 +159,7 @@ export default function NewPaymentPage() {
           <h2 className="text-lg font-bold text-foreground">{t(locale, "ملخص سريع", "Quick summary")}</h2>
           <SummaryRow label={t(locale, "الطالب", "Student")} value={selectedStudent?.fullName ?? "—"} />
           <SummaryRow label={t(locale, "ولي الأمر", "Parent")} value={selectedStudent?.parentName ?? "—"} />
-          <SummaryRow label={t(locale, "الفوترة", "Billing")} value={t(locale, `${form.sessionsCovered} جلسات`, `${form.sessionsCovered} sessions`)} />
+          <SummaryRow label={t(locale, "الفوترة", "Billing")} value={t(locale, `باقة ${form.sessionsCovered} جلسات`, `${form.sessionsCovered}-session block`)} />
           <SummaryRow label={t(locale, "المبلغ", "Amount")} value={form.amount ? `${form.amount} ${isAr ? "ج.م" : "EGP"}` : "—"} />
           <SummaryRow label={t(locale, "الاستحقاق", "Due date")} value={form.dueDate || "—"} />
           <SummaryRow label={t(locale, "التأجيل", "Deferred until")} value={form.deferredUntil || t(locale, "بدون تأجيل", "No deferment")} />
