@@ -120,6 +120,29 @@ function asLossReason(value: unknown): LossReason | null {
     : null;
 }
 
+function isUuid(value: string | null | undefined): value is string {
+  return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+async function resolveAssignedToUuid(preferred: string): Promise<string | null> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return isUuid(preferred) ? preferred : null;
+
+  if (isUuid(preferred)) return preferred;
+
+  try {
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
+
+    if (error || !user?.id || !isUuid(user.id)) return null;
+    return user.id;
+  } catch {
+    return null;
+  }
+}
+
 function mapLeadRow(row: Database["public"]["Tables"]["leads"]["Row"] | Record<string, unknown>): LeadListItem {
   const record = row as Record<string, unknown>;
   return {
@@ -294,22 +317,34 @@ export async function createLead(input: CreateLeadInput): Promise<LeadListItem> 
   }
 
   try {
+    const assignedToUuid = await resolveAssignedToUuid(input.assignedTo);
+    if (!assignedToUuid) {
+      throw new Error("تعذر تحديد المسؤول الصحيح عن العميل. تأكد من تسجيل الدخول أو بيانات المسؤول.");
+    }
+
+    const insertPayload: Database["public"]["Tables"]["leads"]["Insert"] = {
+      parent_name: draftLead.parentName,
+      parent_phone: draftLead.parentPhone,
+      parent_whatsapp: input.parentWhatsapp ?? null,
+      child_name: draftLead.childName,
+      child_age: draftLead.childAge,
+      stage: draftLead.stage,
+      temperature: draftLead.temperature,
+      source: draftLead.source as Database["public"]["Enums"]["lead_source"],
+      has_laptop: input.hasLaptop ?? false,
+      has_prior_experience: input.hasPriorExperience ?? false,
+      child_interests: input.childInterests ?? null,
+      suggested_course: draftLead.suggestedCourse as Database["public"]["Enums"]["course_type"] | null,
+      price_range_shared: false,
+      whatsapp_collected: Boolean((input.parentWhatsapp ?? input.parentPhone).trim()),
+      assigned_to: assignedToUuid,
+      notes: draftLead.notes,
+      created_at: draftLead.createdAt,
+    };
+
     const { data, error } = await supabase
       .from("leads")
-      .insert({
-        parent_name: draftLead.parentName,
-        parent_phone: draftLead.parentPhone,
-        child_name: draftLead.childName,
-        child_age: draftLead.childAge,
-        stage: draftLead.stage,
-        temperature: draftLead.temperature,
-        source: draftLead.source,
-        suggested_course: draftLead.suggestedCourse,
-        assigned_to: draftLead.assignedTo,
-        assigned_to_name: draftLead.assignedToName,
-        notes: draftLead.notes,
-        created_at: draftLead.createdAt,
-      })
+      .insert(insertPayload)
       .select("*")
       .single();
 
@@ -324,19 +359,22 @@ export async function createLead(input: CreateLeadInput): Promise<LeadListItem> 
 
     const synced = mapLeadRow(data);
     const current = getLocalLeads().filter((item) => item.id !== synced.id);
-    saveLocalLeads([synced, ...current]);
+    saveLocalLeads([{ ...synced, assignedToName: draftLead.assignedToName }, ...current]);
 
-    const newActivity: LeadActivityItem = {
-      id: crypto.randomUUID(),
-      leadId: synced.id,
+    const activityPayload: Database["public"]["Tables"]["lead_activities"]["Insert"] = {
+      lead_id: synced.id,
       action: "تم إنشاء العميل المحتمل",
-      date: createdAt,
-      by: synced.assignedToName,
       type: "create",
+      by_name: draftLead.assignedToName,
+      created_at: createdAt,
     };
-    saveLocalActivities([newActivity, ...getLocalActivities().filter((item) => item.leadId !== synced.id || item.type !== "create")]);
 
-    return synced;
+    const { error: activityError } = await supabase.from("lead_activities").insert(activityPayload);
+    if (activityError) {
+      console.warn("[lead_activities] create activity failed", activityError);
+    }
+
+    return { ...synced, assignedToName: draftLead.assignedToName };
   } catch (error) {
     console.error("[leads] create failed", error);
     throw error instanceof Error ? error : new Error("تعذر حفظ العميل");
@@ -389,7 +427,12 @@ export async function updateLead(
   }
 
   try {
-    await supabase
+    const assignedToUuid = await resolveAssignedToUuid(updated.assignedTo);
+    if (!assignedToUuid) {
+      throw new Error("تعذر تحديد المسؤول الصحيح عن العميل.");
+    }
+
+    const { error: updateError } = await supabase
       .from("leads")
       .update({
         parent_name: updated.parentName,
@@ -398,10 +441,9 @@ export async function updateLead(
         child_age: updated.childAge,
         stage: updated.stage,
         temperature: updated.temperature,
-        source: updated.source,
-        suggested_course: updated.suggestedCourse,
-        assigned_to: updated.assignedTo,
-        assigned_to_name: updated.assignedToName,
+        source: updated.source as Database["public"]["Enums"]["lead_source"],
+        suggested_course: updated.suggestedCourse as Database["public"]["Enums"]["course_type"] | null,
+        assigned_to: assignedToUuid,
         notes: updated.notes,
         loss_reason: updated.lossReason,
         next_follow_up_at: updated.nextFollowUpAt,
@@ -409,13 +451,21 @@ export async function updateLead(
       })
       .eq("id", leadId);
 
-    await supabase.from("lead_activities").insert({
+    if (updateError) {
+      throw updateError;
+    }
+
+    const { error: activityError } = await supabase.from("lead_activities").insert({
       lead_id: leadId,
       action: activity.action,
       type: activity.type,
       by_name: activity.by,
       created_at: activity.date,
     });
+
+    if (activityError) {
+      console.warn("[lead_activities] update activity failed", activityError);
+    }
   } catch (error) {
     console.error("[leads] update failed", error);
     if (shouldUseDemoFallback()) return updated;
