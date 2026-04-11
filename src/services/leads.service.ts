@@ -365,7 +365,6 @@ export async function createLead(input: CreateLeadInput): Promise<LeadListItem> 
       lead_id: synced.id,
       action: "تم إنشاء العميل المحتمل",
       type: "create",
-      by_name: draftLead.assignedToName,
       created_at: createdAt,
     };
 
@@ -459,7 +458,6 @@ export async function updateLead(
       lead_id: leadId,
       action: activity.action,
       type: activity.type,
-      by_name: activity.by,
       created_at: activity.date,
     });
 
@@ -521,7 +519,6 @@ export async function updateLeadStage(
       lead_id: leadId,
       action: activity.action,
       type: activity.type,
-      by_name: activity.by,
       created_at: activity.date,
     });
   } catch (error) {
