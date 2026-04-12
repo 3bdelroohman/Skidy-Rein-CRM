@@ -1,4 +1,5 @@
 import type { StudentDetails } from "@/types/crm";
+import { buildStudentReportSnapshot } from "@/services/student-report.service";
 
 export interface StudentJourneyMilestone {
   id: string;
@@ -17,6 +18,8 @@ export interface StudentJourneySummary {
 }
 
 export function buildStudentJourney(student: StudentDetails): StudentJourneySummary {
+  const report = buildStudentReportSnapshot(student);
+
   const milestones: StudentJourneyMilestone[] = [
     {
       id: "enrollment",
@@ -25,6 +28,14 @@ export function buildStudentJourney(student: StudentDetails): StudentJourneySumm
       detailAr: `التحق بتاريخ ${student.enrollmentDate}`,
       detailEn: `Joined on ${student.enrollmentDate}`,
       tone: "brand",
+    },
+    {
+      id: "class",
+      titleAr: "الكلاس الحالي",
+      titleEn: "Current class",
+      detailAr: report.className ? `الطالب مرتبط الآن بـ ${report.className}` : "لم يتم ربط كلاس بعد",
+      detailEn: report.className ? `Currently linked to ${report.className}` : "No class linked yet",
+      tone: report.className ? "info" : "warning",
     },
     {
       id: "course",
@@ -38,17 +49,29 @@ export function buildStudentJourney(student: StudentDetails): StudentJourneySumm
       id: "teacher",
       titleAr: "المدرس المرتبط",
       titleEn: "Assigned teacher",
-      detailAr: student.teachers[0] ? `المدرس الحالي: ${student.teachers[0].fullName}` : "لم يتم ربط مدرس بعد",
-      detailEn: student.teachers[0] ? `Current teacher: ${student.teachers[0].fullName}` : "No teacher linked yet",
-      tone: student.teachers[0] ? "success" : "warning",
+      detailAr: report.teacherName ? `المدرس الحالي: ${report.teacherName}` : "لم يتم ربط مدرس بعد",
+      detailEn: report.teacherName ? `Current teacher: ${report.teacherName}` : "No teacher linked yet",
+      tone: report.teacherName ? "success" : "warning",
     },
     {
       id: "sessions",
       titleAr: "الإنجاز داخل الحصص",
       titleEn: "Session progress",
-      detailAr: `أنجز ${student.sessionsAttended} حصة حتى الآن`,
+      detailAr: `أنجز ${student.sessionsAttended} حصة حتى الآن` ,
       detailEn: `Completed ${student.sessionsAttended} sessions so far`,
       tone: student.sessionsAttended >= 4 ? "success" : "info",
+    },
+    {
+      id: "report",
+      titleAr: "نقطة التقرير القادمة",
+      titleEn: "Next report checkpoint",
+      detailAr: report.ready
+        ? `آخر نقطة تقرير مكتملة عند ${report.currentCheckpoint} حصص، والنقطة القادمة عند ${report.nextCheckpoint}`
+        : `أول تقرير يصبح جاهزًا بعد ${report.sessionsUntilNext} حصص إضافية`,
+      detailEn: report.ready
+        ? `Last completed checkpoint at ${report.currentCheckpoint} sessions, next one at ${report.nextCheckpoint}`
+        : `First report becomes ready after ${report.sessionsUntilNext} more sessions`,
+      tone: report.ready ? "success" : "info",
     },
     {
       id: "payments",
@@ -61,8 +84,8 @@ export function buildStudentJourney(student: StudentDetails): StudentJourneySumm
   ];
 
   const reportReady = student.sessionsAttended >= 4;
-  const stageAr = reportReady ? "جاهز لأول تقرير شهري" : "ما زال في مرحلة التأسيس";
-  const stageEn = reportReady ? "Ready for the first monthly report" : "Still in the foundation phase";
+  const stageAr = reportReady ? "جاهز للتقرير الحالي" : "ما زال قبل أول نقطة تقرير";
+  const stageEn = reportReady ? "Ready for the current report checkpoint" : "Still before the first report checkpoint";
 
   return { stageAr, stageEn, reportReady, milestones };
 }

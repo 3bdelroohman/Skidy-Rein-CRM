@@ -68,23 +68,45 @@ function findStudentsForParent(parent: ParentListItem, students: StudentListItem
   });
 }
 
+function scoreSessionForStudent(student: StudentListItem, session: ScheduleSessionItem): number {
+  let score = 0;
+  if (student.className && sameName(student.className, session.className)) score += 100;
+  if (student.currentCourse && student.currentCourse === session.course) score += 10;
+  return score;
+}
+
 function findSessionsForStudent(student: StudentListItem, sessions: ScheduleSessionItem[]): ScheduleSessionItem[] {
-  const directClass = student.className
-    ? sessions.filter((session) => sameName(session.className, student.className))
-    : [];
-
-  if (directClass.length > 0) return directClass;
-  if (!student.currentCourse) return [];
-
-  return sessions.filter((session) => session.course === student.currentCourse);
+  return sessions
+    .map((session) => ({ session, score: scoreSessionForStudent(student, session) }))
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score || a.session.day - b.session.day || a.session.startTime.localeCompare(b.session.startTime))
+    .map((item) => item.session);
 }
 
 function findSessionsForTeacher(teacher: TeacherListItem, sessions: ScheduleSessionItem[]): ScheduleSessionItem[] {
   return sessions.filter((session) => {
+    if (session.teacherId && session.teacherId === teacher.id) return true;
     const sessionTeacher = normalizeName(session.teacher);
     const teacherName = normalizeName(teacher.fullName);
     return sessionTeacher.length > 0 && (sessionTeacher.includes(teacherName) || teacherName.includes(sessionTeacher));
   });
+}
+
+function selectTeacherForSession(session: ScheduleSessionItem, teachers: TeacherListItem[]): TeacherListItem | null {
+  if (session.teacherId) {
+    const direct = teachers.find((teacher) => teacher.id === session.teacherId);
+    if (direct) return direct;
+  }
+
+  const target = normalizeName(session.teacher);
+  if (!target) return null;
+
+  return (
+    teachers.find((teacher) => {
+      const name = normalizeName(teacher.fullName);
+      return name.includes(target) || target.includes(name);
+    }) ?? null
+  );
 }
 
 function uniqueTeachers(teachers: TeacherListItem[]): TeacherListItem[] {
@@ -133,7 +155,6 @@ function findStudentForLead(lead: LeadListItem, students: StudentListItem[], par
     }) ?? null
   );
 }
-
 
 function findRelatedLeadForParent(parent: ParentListItem, leads: LeadListItem[]): LeadListItem | null {
   return (
@@ -271,7 +292,7 @@ export async function getStudentDetails(id: string): Promise<StudentDetails | nu
   const relatedSessions = findSessionsForStudent(student, sessions);
   const linkedTeachers = uniqueTeachers(
     relatedSessions
-      .map((session) => teachers.find((teacher) => findSessionsForTeacher(teacher, [session]).length > 0) ?? null)
+      .map((session) => selectTeacherForSession(session, teachers))
       .filter((teacher): teacher is TeacherListItem => teacher !== null),
   );
 

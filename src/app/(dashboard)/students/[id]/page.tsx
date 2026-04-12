@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, CalendarDays, GraduationCap, MessageCircle, Phone, UserCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarDays, GraduationCap, MessageCircle, UserCircle, ClipboardList } from "lucide-react";
 import { useUIStore } from "@/stores/ui-store";
 import { STUDENT_STATUS_META, getMetaLabel } from "@/config/status-meta";
 import { getCourseFormLabel, getCourseTracks } from "@/config/course-roadmap";
@@ -10,6 +10,7 @@ import { t } from "@/lib/locale";
 import { formatCurrencyEgp, formatDate } from "@/lib/formatters";
 import { getStudentDetails } from "@/services/relations.service";
 import { buildStudentJourney } from "@/services/student-journey.service";
+import { buildStudentReportSnapshot } from "@/services/student-report.service";
 import { LoadingState, PageStateCard } from "@/components/shared/page-state";
 import type { StudentDetails } from "@/types/crm";
 
@@ -62,7 +63,9 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
   const status = STUDENT_STATUS_META[student.status];
   const courseTracks = student.currentCourse ? getCourseTracks(student.currentCourse, locale) : [];
   const journey = buildStudentJourney(student);
+  const report = buildStudentReportSnapshot(student);
   const primaryTeacher = student.teachers[0] ?? null;
+  const linkedClassName = report.className ?? student.className ?? t(locale, "غير مسجل", "Not assigned");
 
   return (
     <div className="space-y-6">
@@ -87,11 +90,11 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
             <Info label={t(locale, "العمر", "Age")} value={`${student.age} ${t(locale, "سنة", "years")}`} />
             <Info label={t(locale, "الحالة", "Status")} value={getMetaLabel(status, locale)} />
             <Info label={t(locale, "الكورس الحالي", "Current course")} value={student.currentCourse ? getCourseFormLabel(student.currentCourse, locale) : t(locale, "غير محدد", "Not set")} />
-            <Info label={t(locale, "الكلاس", "Class")} value={student.className ?? t(locale, "غير مسجل", "Not assigned")} />
+            <Info label={t(locale, "الكلاس", "Class")} value={linkedClassName} />
             <Info label={t(locale, "تاريخ الالتحاق", "Enrollment date")} value={formatDate(student.enrollmentDate, locale)} />
             <Info label={t(locale, "عدد الحصص", "Sessions attended")} value={student.sessionsAttended.toString()} />
-            <Info label={t(locale, "المسؤول", "Owner")} value={student.ownerName ?? t(locale, "غير مخصص", "Unassigned")} />
             <Info label={t(locale, "إجمالي المدفوع", "Total paid")} value={formatCurrencyEgp(student.totalPaid, locale)} />
+            <Info label={t(locale, "المدرس الحالي", "Current teacher")} value={report.teacherName ?? t(locale, "غير مرتبط بعد", "Not linked yet")} />
           </div>
           {courseTracks.length > 0 ? (
             <div className="mt-4 border-t border-border pt-4">
@@ -121,12 +124,6 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
                   {t(locale, "فتح ملف ولي الأمر", "Open parent profile")}
                 </Link>
               ) : null}
-              <a href={`tel:${student.parentPhone}`} className="rounded-xl border border-border px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted">
-                {t(locale, "اتصال", "Call")}
-              </a>
-              <a href={`https://wa.me/2${student.parentPhone.replace(/\D/g, "")}`} target="_blank" rel="noreferrer" className="rounded-xl border border-border px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted">
-                {t(locale, "واتساب", "WhatsApp")}
-              </a>
             </div>
           </div>
 
@@ -146,7 +143,6 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
           </div>
         </div>
       </div>
-
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <div className="rounded-2xl border border-border bg-card p-5 xl:col-span-2">
@@ -168,20 +164,39 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
           </div>
         </div>
 
-        <div className="rounded-2xl border border-border bg-card p-5">
-          <h3 className="mb-3 flex items-center gap-2 font-bold text-foreground"><MessageCircle size={18} className="text-brand-600" />{t(locale, "المدرس الحالي", "Current teacher")}</h3>
-          {primaryTeacher ? (
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-border bg-card p-5">
+            <h3 className="mb-3 flex items-center gap-2 font-bold text-foreground"><MessageCircle size={18} className="text-brand-600" />{t(locale, "المدرس الحالي", "Current teacher")}</h3>
+            {primaryTeacher ? (
+              <div className="space-y-3">
+                <Info label={t(locale, "الاسم", "Name")} value={primaryTeacher.fullName} />
+                <Info label={t(locale, "الهاتف", "Phone")} value={primaryTeacher.phone} />
+                <Info label={t(locale, "الكلاس المرتبط", "Linked class")} value={linkedClassName} />
+                <Info label={t(locale, "التخصص", "Specialization")} value={primaryTeacher.specialization.map((item) => getCourseFormLabel(item, locale)).join(" • ")} />
+                <Link href={`/teachers/${primaryTeacher.id}`} className="inline-flex rounded-xl bg-brand-600 px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90">
+                  {t(locale, "فتح ملف المدرس", "Open teacher profile")}
+                </Link>
+              </div>
+            ) : (
+              <EmptyCopy locale={locale} ar="لم يتم ربط مدرس أساسي بهذا الطالب بعد" en="No primary teacher has been linked to this student yet" />
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-border bg-card p-5">
+            <h3 className="mb-3 flex items-center gap-2 font-bold text-foreground"><ClipboardList size={18} className="text-brand-600" />{t(locale, "مصدر التقرير القادم", "Next report source")}</h3>
             <div className="space-y-3">
-              <Info label={t(locale, "الاسم", "Name")} value={primaryTeacher.fullName} />
-              <Info label={t(locale, "الهاتف", "Phone")} value={primaryTeacher.phone} />
-              <Info label={t(locale, "التخصص", "Specialization")} value={primaryTeacher.specialization.map((item) => getCourseFormLabel(item, locale)).join(" • ")} />
-              <Link href={`/teachers/${primaryTeacher.id}`} className="inline-flex rounded-xl bg-brand-600 px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90">
-                {t(locale, "فتح ملف المدرس", "Open teacher profile")}
-              </Link>
+              <Info label={t(locale, "آخر نقطة مكتملة", "Last completed checkpoint")} value={report.currentCheckpoint > 0 ? `${report.currentCheckpoint}` : t(locale, "لم يكتمل بعد", "Not completed yet")} />
+              <Info label={t(locale, "النقطة القادمة", "Next checkpoint")} value={`${report.nextCheckpoint} ${t(locale, "حصص", "sessions")}`} />
+              <Info label={t(locale, "المتبقي", "Remaining")} value={`${report.sessionsUntilNext} ${t(locale, "حصص", "sessions")}`} />
+              <div className="rounded-xl bg-muted/40 p-3">
+                <p className="text-xs text-muted-foreground">{t(locale, "التقدم داخل الدورة الحالية", "Progress inside current cycle")}</p>
+                <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-muted">
+                  <div className="h-full rounded-full bg-brand-600 transition-all" style={{ width: `${report.progressPercent}%` }} />
+                </div>
+                <p className="mt-2 text-xs font-medium text-foreground">{report.progressPercent}%</p>
+              </div>
             </div>
-          ) : (
-            <EmptyCopy locale={locale} ar="لم يتم ربط مدرس أساسي بهذا الطالب بعد" en="No primary teacher has been linked to this student yet" />
-          )}
+          </div>
         </div>
       </div>
 
@@ -197,7 +212,7 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="font-semibold text-foreground">{session.className}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">{session.startTime} → {session.endTime}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{session.teacher} • {session.startTime} → {session.endTime}</p>
                     </div>
                     <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] text-muted-foreground">{getCourseFormLabel(session.course, locale)}</span>
                   </div>
