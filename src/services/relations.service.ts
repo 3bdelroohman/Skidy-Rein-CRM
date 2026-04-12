@@ -14,6 +14,7 @@ import { listParents } from "@/services/parents.service";
 import { listScheduleSessions } from "@/services/schedule.service";
 import { getStudentById, listStudents } from "@/services/students.service";
 import { listTeachers } from "@/services/teachers.service";
+import { getTeacherEvaluation } from "@/services/teacher-evaluations.service";
 
 const LEAD_PARENT_PROJECTION_PREFIX = "lead-projection-parent:";
 const LEAD_STUDENT_PROJECTION_PREFIX = "lead-projection-student:";
@@ -320,10 +321,15 @@ export async function getTeacherDetails(id: string): Promise<TeacherDetails | nu
     return classMatch || courseMatch;
   });
 
+  const evaluation = getTeacherEvaluation(teacher.id);
+
   return {
     ...teacher,
     linkedSessions,
     linkedStudents,
     activeCourses: uniqueCourses(linkedSessions.map((session) => session.course)),
+    manualRating: evaluation?.rating ?? null,
+    evaluationNotes: evaluation?.notes ?? null,
+    evaluationUpdatedAt: evaluation?.updatedAt ?? null,
   };
 }

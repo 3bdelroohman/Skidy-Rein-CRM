@@ -102,7 +102,7 @@ export interface TeacherListItem {
   id: string;
   fullName: string;
   phone: string;
-  email: string;
+  email: string | null;
   specialization: CourseType[];
   employment: EmploymentType;
   classesCount: number;
@@ -188,6 +188,9 @@ export interface ParentDetails extends ParentListItem {
 }
 
 export interface TeacherDetails extends TeacherListItem {
+  manualRating?: number | null;
+  evaluationNotes?: string | null;
+  evaluationUpdatedAt?: string | null;
   linkedSessions: ScheduleSessionItem[];
   linkedStudents: StudentListItem[];
   activeCourses: CourseType[];
@@ -379,7 +382,7 @@ export interface CreateStudentInput {
 export interface CreateTeacherInput {
   fullName: string;
   phone: string;
-  email: string;
+  email?: string | null;
   employment: EmploymentType;
   specialization: CourseType[];
   isActive?: boolean;

@@ -2,11 +2,12 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, Mail, Phone, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, Phone, Save, Star, Users } from "lucide-react";
 import { useUIStore } from "@/stores/ui-store";
 import { formatCourseLabel } from "@/lib/formatters";
 import { getEmploymentTypeLabel, t } from "@/lib/locale";
 import { getTeacherDetails } from "@/services/relations.service";
+import { saveTeacherEvaluation } from "@/services/teacher-evaluations.service";
 import { LoadingState, PageStateCard } from "@/components/shared/page-state";
 import type { TeacherDetails } from "@/types/crm";
 
@@ -16,12 +17,16 @@ export default function TeacherDetailsPage({ params }: { params: Promise<{ id: s
   const isAr = locale === "ar";
   const [teacher, setTeacher] = useState<TeacherDetails | null>(null);
   const [loading, setLoading] = useState(true);
+  const [rating, setRating] = useState("3");
+  const [notes, setNotes] = useState("");
 
   useEffect(() => {
     let mounted = true;
     getTeacherDetails(id).then((data) => {
       if (mounted) {
         setTeacher(data);
+        setRating(data?.manualRating ? String(data.manualRating) : "3");
+        setNotes(data?.evaluationNotes ?? "");
         setLoading(false);
       }
     });
@@ -98,8 +103,35 @@ export default function TeacherDetailsPage({ params }: { params: Promise<{ id: s
           <h3 className="mb-3 flex items-center gap-2 font-bold text-foreground"><Users size={18} className="text-brand-600" />{t(locale, "بيانات التواصل", "Contact details")}</h3>
           <div className="space-y-3">
             <Info icon={Phone} label={t(locale, "الهاتف", "Phone")} value={teacher.phone} href={`tel:${teacher.phone}`} />
-            <Info icon={Mail} label={t(locale, "البريد", "Email")} value={teacher.email} href={`mailto:${teacher.email}`} />
             <Info icon={BookOpen} label={t(locale, "الحالة", "Status")} value={teacher.isActive ? t(locale, "نشط", "Active") : t(locale, "غير نشط", "Inactive")} />
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-border bg-card p-5">
+          <h3 className="mb-3 flex items-center gap-2 font-bold text-foreground"><Star size={18} className="text-brand-600" />{t(locale, "التقييم", "Evaluation")}</h3>
+          <div className="space-y-3">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-foreground">{t(locale, "التقييم العام", "Overall rating")}</label>
+              <select value={rating} onChange={(event) => setRating(event.target.value)} className="w-full rounded-xl border border-input bg-muted/50 px-4 py-2.5 text-sm text-foreground focus:border-transparent focus:ring-2 focus:ring-ring">
+                {[1,2,3,4,5].map((item) => <option key={item} value={item}>{item}/5</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-foreground">{t(locale, "ملاحظات التقييم", "Evaluation notes")}</label>
+              <textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={4} className="w-full rounded-xl border border-input bg-muted/50 px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-transparent focus:ring-2 focus:ring-ring" />
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const saved = saveTeacherEvaluation({ teacherId: teacher.id, rating: Number(rating), notes });
+                setTeacher((prev) => prev ? { ...prev, manualRating: saved.rating, evaluationNotes: saved.notes, evaluationUpdatedAt: saved.updatedAt } : prev);
+              }}
+              className="inline-flex items-center gap-2 rounded-xl bg-brand-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
+            >
+              <Save size={16} />
+              {t(locale, "حفظ التقييم", "Save evaluation")}
+            </button>
+            {teacher.evaluationUpdatedAt ? <p className="text-xs text-muted-foreground">{t(locale, "آخر تحديث", "Last updated")}: {new Date(teacher.evaluationUpdatedAt).toLocaleString(isAr ? "ar-EG" : "en-US")}</p> : null}
           </div>
         </div>
       </div>

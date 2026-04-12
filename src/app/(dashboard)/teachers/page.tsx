@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, Mail, Phone, Plus, Search } from "lucide-react";
+import { BookOpen, Phone, Plus, Search } from "lucide-react";
 import { useUIStore } from "@/stores/ui-store";
 import { COURSE_TYPE_LABELS, COURSE_TYPE_EN_LABELS } from "@/config/labels";
 import { getEmploymentTypeLabel, t } from "@/lib/locale";
@@ -108,8 +108,7 @@ export default function TeachersPage() {
 
               <div className="mt-3 space-y-1.5 border-t border-border pt-3 text-xs text-muted-foreground">
                 <div className="flex items-center gap-2"><Phone size={14} />{teacher.phone}</div>
-                <div className="flex items-center gap-2"><Mail size={14} />{teacher.email}</div>
-              </div>
+                              </div>
             </Link>
           ))}
           {!loading && filtered.length === 0 ? <div className="col-span-full"><EmptySearchState /></div> : null}

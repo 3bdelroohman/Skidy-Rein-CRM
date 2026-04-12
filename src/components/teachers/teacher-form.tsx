@@ -38,15 +38,14 @@ export function TeacherForm({ title, description, submitLabel, successMessage, o
   const [form, setForm] = useState({
     fullName: "",
     phone: "",
-    email: "",
     employment: "part_time" as EmploymentType,
     specialization: ["scratch"] as CourseType[],
   });
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!form.fullName.trim() || !form.phone.trim() || !form.email.trim()) {
-      toast.error(t(locale, "اسم المدرس والهاتف والبريد مطلوبة", "Teacher name, phone, and email are required"));
+    if (!form.fullName.trim() || !form.phone.trim()) {
+      toast.error(t(locale, "اسم المدرس والهاتف مطلوبان", "Teacher name and phone are required"));
       return;
     }
     if (form.specialization.length === 0) {
@@ -59,7 +58,6 @@ export function TeacherForm({ title, description, submitLabel, successMessage, o
       await onSubmit({
         fullName: form.fullName.trim(),
         phone: form.phone.trim(),
-        email: form.email.trim(),
         employment: form.employment,
         specialization: form.specialization,
       });
@@ -96,9 +94,6 @@ export function TeacherForm({ title, description, submitLabel, successMessage, o
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label={t(locale, "اسم المدرس *", "Teacher name *")} value={form.fullName} onChange={(value) => setForm((prev) => ({ ...prev, fullName: value }))} />
             <Field label={t(locale, "الهاتف *", "Phone *")} value={form.phone} onChange={(value) => setForm((prev) => ({ ...prev, phone: value }))} type="tel" />
-            <div className="sm:col-span-2">
-              <Field label={t(locale, "البريد الإلكتروني *", "Email *")} value={form.email} onChange={(value) => setForm((prev) => ({ ...prev, email: value }))} type="email" />
-            </div>
             <div className="sm:col-span-2">
               <label className="mb-1.5 block text-sm font-medium text-foreground">{t(locale, "نوع التعاقد", "Employment type")}</label>
               <select value={form.employment} onChange={(event) => setForm((prev) => ({ ...prev, employment: event.target.value as EmploymentType }))} className="w-full rounded-xl border border-input bg-muted/50 px-4 py-2.5 text-sm text-foreground focus:border-transparent focus:ring-2 focus:ring-ring">

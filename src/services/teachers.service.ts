@@ -74,7 +74,7 @@ function mapRow(row: Record<string, unknown>): TeacherListItem {
     id: asString(row.id, crypto.randomUUID()),
     fullName: asString(row.full_name ?? row.fullName, "مدرس غير محدد"),
     phone: asString(row.phone, fallback?.phone ?? "—"),
-    email: asString(row.email, fallback?.email ?? "—"),
+    email: asString(row.email, fallback?.email ?? "") || null,
     specialization: asSpecialization(row.specialization, fallback?.specialization ?? []),
     employment: asEmployment(row.employment ?? fallback?.employment),
     classesCount: asNumber(row.classes_count ?? row.classesCount, fallback?.classesCount ?? 0),
@@ -121,7 +121,9 @@ export async function createTeacher(input: CreateTeacherInput): Promise<TeacherL
   const existing = await listTeachers();
   const duplicate = existing.find((teacher) => {
     const samePhone = normalizePhone(teacher.phone) === normalizePhone(input.phone);
-    const sameEmail = teacher.email !== "—" && input.email.trim().length > 0 && teacher.email.toLowerCase() === input.email.trim().toLowerCase();
+    const inputEmail = (input.email ?? "").trim().toLowerCase();
+    const teacherEmail = (teacher.email ?? "").trim().toLowerCase();
+    const sameEmail = teacherEmail.length > 0 && inputEmail.length > 0 && teacherEmail === inputEmail;
     const sameName = normalizeName(teacher.fullName) === normalizeName(input.fullName);
     return samePhone || sameEmail || (sameName && samePhone);
   });
@@ -133,7 +135,7 @@ export async function createTeacher(input: CreateTeacherInput): Promise<TeacherL
   const payload: Database["public"]["Tables"]["teachers"]["Insert"] = {
     full_name: input.fullName,
     phone: input.phone,
-    email: input.email,
+    email: input.email?.trim() || null,
     employment: input.employment,
     specialization: input.specialization,
     classes_count: 0,
