@@ -8,8 +8,9 @@ import type {
   LeadListItem,
   UpdateLeadInput,
 } from "@/types/crm";
-import { MOCK_LEADS, MOCK_LEAD_ACTIVITIES, MOCK_TEAM } from "@/lib/mock-data";
+import { MOCK_TEAM } from "@/lib/mock-data";
 import { isBrowser, readStorage, sortByDateDesc, writeStorage } from "@/services/storage";
+import { ensureLeadEnrollment } from "@/services/enrollment.service";
 
 const LEADS_KEY = "skidy.crm.leads";
 const ACTIVITIES_KEY = "skidy.crm.lead-activities";
@@ -45,25 +46,8 @@ function getSupabaseClient() {
   return createBrowserClient<Database>(url, key);
 }
 
-function isDemoModeEnabled(): boolean {
-  return process.env.NEXT_PUBLIC_ALLOW_DEMO_FALLBACK === "true";
-}
-
-function shouldUseDemoFallback(): boolean {
-  return !getSupabaseClient() && isDemoModeEnabled();
-}
-
-function mockLeads(): LeadListItem[] {
-  return MOCK_LEADS.map((lead) => ({ ...lead }));
-}
-
-function mockActivities(): LeadActivityItem[] {
-  return MOCK_LEAD_ACTIVITIES.map((activity) => ({ ...activity }));
-}
-
 function getLocalLeads(): LeadListItem[] {
-  const seed = shouldUseDemoFallback() ? mockLeads() : ([] as LeadListItem[]);
-  return sortByDateDesc(readStorage(LEADS_KEY, seed), (lead) => lead.createdAt);
+  return sortByDateDesc(readStorage(LEADS_KEY, [] as LeadListItem[]), (lead) => lead.createdAt);
 }
 
 function saveLocalLeads(leads: LeadListItem[]): void {
@@ -75,8 +59,7 @@ function clearLocalLeads(): void {
 }
 
 function getLocalActivities(): LeadActivityItem[] {
-  const seed = shouldUseDemoFallback() ? mockActivities() : ([] as LeadActivityItem[]);
-  return sortByDateDesc(readStorage(ACTIVITIES_KEY, seed), (activity) => activity.date);
+  return sortByDateDesc(readStorage(ACTIVITIES_KEY, [] as LeadActivityItem[]), (activity) => activity.date);
 }
 
 function saveLocalActivities(activities: LeadActivityItem[]): void {
@@ -230,9 +213,8 @@ async function syncActivitiesFromSupabase(leadId: string): Promise<LeadActivityI
 }
 
 export async function listLeads(): Promise<LeadListItem[]> {
-  const demoFallback = shouldUseDemoFallback() ? getLocalLeads() : [];
   try {
-    return (await syncLeadsFromSupabase()) ?? demoFallback;
+    return (await syncLeadsFromSupabase()) ?? [];
   } catch (error) {
     console.error("[leads] unexpected load failure", error);
     clearLocalLeads();
@@ -260,9 +242,8 @@ export async function getLeadById(id: string): Promise<LeadListItem | null> {
 }
 
 export async function listLeadActivities(leadId: string): Promise<LeadActivityItem[]> {
-  const demoFallback = shouldUseDemoFallback() ? getLocalActivities().filter((activity) => activity.leadId === leadId) : [];
   try {
-    return (await syncActivitiesFromSupabase(leadId)) ?? demoFallback;
+    return (await syncActivitiesFromSupabase(leadId)) ?? [];
   } catch (error) {
     console.error("[lead_activities] unexpected load failure", error);
     return [];
@@ -296,24 +277,7 @@ export async function createLead(input: CreateLeadInput): Promise<LeadListItem> 
   const supabase = getSupabaseClient();
 
   if (!supabase) {
-    if (!shouldUseDemoFallback()) {
-      throw new Error("تعذر الاتصال بقاعدة البيانات. أعد المحاولة بعد تسجيل الدخول أو التحقق من الإعدادات.");
-    }
-
-    const current = getLocalLeads();
-    saveLocalLeads([draftLead, ...current]);
-
-    const demoActivity: LeadActivityItem = {
-      id: crypto.randomUUID(),
-      leadId: draftLead.id,
-      action: "تم إنشاء العميل المحتمل",
-      date: createdAt,
-      by: draftLead.assignedToName,
-      type: "create",
-    };
-    saveLocalActivities([demoActivity, ...getLocalActivities()]);
-
-    return draftLead;
+    throw new Error("تعذر الاتصال بقاعدة البيانات. أعد المحاولة بعد تسجيل الدخول أو التحقق من الإعدادات.");
   }
 
   try {
@@ -385,8 +349,7 @@ export async function updateLead(
   input: UpdateLeadInput,
   actorName = input.assignedToName || "النظام",
 ): Promise<LeadListItem | null> {
-  const current = getLocalLeads();
-  const existing = current.find((lead) => lead.id === leadId);
+  const existing = await getLeadById(leadId);
   if (!existing) return null;
 
   const updated: LeadListItem = {
@@ -407,8 +370,6 @@ export async function updateLead(
     lastContactAt: new Date().toISOString(),
   };
 
-  saveLocalLeads(current.map((lead) => (lead.id === leadId ? updated : lead)));
-
   const activity: LeadActivityItem = {
     id: crypto.randomUUID(),
     leadId,
@@ -417,12 +378,10 @@ export async function updateLead(
     by: actorName,
     type: "note",
   };
-  saveLocalActivities([activity, ...getLocalActivities()]);
 
   const supabase = getSupabaseClient();
   if (!supabase) {
-    if (shouldUseDemoFallback()) return updated;
-    throw new Error("Supabase client is not available");
+    throw new Error("تعذر الاتصال بقاعدة البيانات. تأكد من إعدادات Supabase ثم أعد المحاولة.");
   }
 
   try {
@@ -431,7 +390,7 @@ export async function updateLead(
       throw new Error("تعذر تحديد المسؤول الصحيح عن العميل.");
     }
 
-    const { error: updateError } = await supabase
+    const { data, error: updateError } = await supabase
       .from("leads")
       .update({
         parent_name: updated.parentName,
@@ -447,30 +406,38 @@ export async function updateLead(
         loss_reason: updated.lossReason,
         next_follow_up_at: updated.nextFollowUpAt,
         last_contact_at: updated.lastContactAt,
+        updated_at: new Date().toISOString(),
       })
-      .eq("id", leadId);
+      .eq("id", leadId)
+      .select("*")
+      .single();
 
-    if (updateError) {
-      throw updateError;
+    if (updateError || !data) {
+      throw updateError ?? new Error("تعذر تحديث العميل.");
     }
+
+    const synced = { ...mapLeadRow(data), assignedToName: updated.assignedToName };
+    saveLocalLeads([synced, ...getLocalLeads().filter((lead) => lead.id !== leadId)]);
 
     const { error: activityError } = await supabase.from("lead_activities").insert({
       lead_id: leadId,
       action: activity.action,
       type: activity.type,
+      by_name: activity.by,
       created_at: activity.date,
     });
 
     if (activityError) {
       console.warn("[lead_activities] update activity failed", activityError);
+    } else {
+      saveLocalActivities([activity, ...getLocalActivities().filter((item) => item.id !== activity.id)]);
     }
+
+    return synced;
   } catch (error) {
     console.error("[leads] update failed", error);
-    if (shouldUseDemoFallback()) return updated;
     throw error instanceof Error ? error : new Error("Failed to update lead");
   }
-
-  return updated;
 }
 
 export async function updateLeadStage(
@@ -478,54 +445,71 @@ export async function updateLeadStage(
   stage: LeadStage,
   actorName: string,
 ): Promise<LeadListItem | null> {
-  const current = getLocalLeads();
-  const existing = current.find((lead) => lead.id === leadId);
+  const existing = await getLeadById(leadId);
   if (!existing) return null;
 
+  const updatedAt = new Date().toISOString();
   const updated: LeadListItem = {
     ...existing,
     stage,
-    lastContactAt: new Date().toISOString(),
+    lastContactAt: updatedAt,
   };
-
-  saveLocalLeads(current.map((lead) => (lead.id === leadId ? updated : lead)));
 
   const activity: LeadActivityItem = {
     id: crypto.randomUUID(),
     leadId,
     action: `تم نقل المرحلة إلى ${STAGE_LABELS[stage]}`,
-    date: new Date().toISOString(),
+    date: updatedAt,
     by: actorName,
     type: "stage",
   };
-  saveLocalActivities([activity, ...getLocalActivities()]);
 
   const supabase = getSupabaseClient();
   if (!supabase) {
-    if (shouldUseDemoFallback()) return updated;
-    throw new Error("Supabase client is not available");
+    throw new Error("تعذر الاتصال بقاعدة البيانات. تأكد من إعدادات Supabase ثم أعد المحاولة.");
   }
 
   try {
-    await supabase
+    if (stage === "won") {
+      await ensureLeadEnrollment(leadId);
+    }
+
+    const { data, error } = await supabase
       .from("leads")
       .update({
         stage,
         last_contact_at: updated.lastContactAt,
+        won_at: stage === "won" ? updatedAt : null,
+        lost_at: stage === "lost" ? updatedAt : null,
+        updated_at: updatedAt,
       })
-      .eq("id", leadId);
+      .eq("id", leadId)
+      .select("*")
+      .single();
 
-    await supabase.from("lead_activities").insert({
+    if (error || !data) {
+      throw error ?? new Error("تعذر تحديث مرحلة العميل.");
+    }
+
+    const { error: activityError } = await supabase.from("lead_activities").insert({
       lead_id: leadId,
       action: activity.action,
       type: activity.type,
+      by_name: activity.by,
       created_at: activity.date,
     });
+
+    if (activityError) {
+      console.warn("[lead_activities] stage activity failed", activityError);
+    } else {
+      saveLocalActivities([activity, ...getLocalActivities().filter((item) => item.id !== activity.id)]);
+    }
+
+    const synced = mapLeadRow(data);
+    saveLocalLeads([synced, ...getLocalLeads().filter((lead) => lead.id !== leadId)]);
+    return synced;
   } catch (error) {
     console.error("[leads] stage update failed", error);
-    if (shouldUseDemoFallback()) return updated;
     throw error instanceof Error ? error : new Error("Failed to update lead stage");
   }
-
-  return updated;
 }

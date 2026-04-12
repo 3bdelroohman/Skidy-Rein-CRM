@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { GraduationCap, Search } from "lucide-react";
+import { GraduationCap, Plus, Search } from "lucide-react";
 import { useUIStore } from "@/stores/ui-store";
 import { getFilterLabel, t } from "@/lib/locale";
 import { STUDENT_STATUS_META, getMetaLabel } from "@/config/status-meta";
 import { formatCourseLabel, formatCurrencyEgp } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import { listStudents } from "@/services/students.service";
+import { syncWonLeadsToEnrollments } from "@/services/enrollment.service";
 import { listParentsWithRelations } from "@/services/relations.service";
 import type { ParentListItem, StudentListItem } from "@/types/crm";
 import type { StudentStatus } from "@/types/common.types";
@@ -31,11 +32,15 @@ export default function StudentsPage() {
     let isMounted = true;
     async function load() {
       setLoading(true);
-      const [studentData, parentData] = await Promise.all([listStudents(), listParentsWithRelations()]);
-      if (isMounted) {
-        setStudents(studentData);
-        setParents(parentData);
-        setLoading(false);
+      try {
+        await syncWonLeadsToEnrollments();
+        const [studentData, parentData] = await Promise.all([listStudents(), listParentsWithRelations()]);
+        if (isMounted) {
+          setStudents(studentData);
+          setParents(parentData);
+        }
+      } finally {
+        if (isMounted) setLoading(false);
       }
     }
     load();
@@ -67,12 +72,19 @@ export default function StudentsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
-          <GraduationCap size={28} className="text-brand-600" />
-          {t(locale, "الطلاب", "Students")}
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">{t(locale, "رؤية أوضح للطلاب الحاليين وربطهم بأولياء الأمور والكلاسات", "A clearer view of current students and their parent and class relationships")}</p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
+            <GraduationCap size={28} className="text-brand-600" />
+            {t(locale, "الطلاب", "Students")}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">{t(locale, "رؤية أوضح للطلاب الحاليين وربطهم بأولياء الأمور والكلاسات", "A clearer view of current students and their parent and class relationships")}</p>
+        </div>
+
+        <Link href="/students/new" className="inline-flex items-center gap-2 rounded-xl bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600">
+          <Plus size={18} />
+          {t(locale, "إضافة طالب", "Add student")}
+        </Link>
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row">

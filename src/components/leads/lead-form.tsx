@@ -14,13 +14,12 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  COURSE_TYPE_EN_LABELS,
-  COURSE_TYPE_LABELS,
   LEAD_SOURCE_EN_LABELS,
   LEAD_SOURCE_LABELS,
   TEMPERATURE_EN_LABELS,
   TEMPERATURE_LABELS,
 } from "@/config/labels";
+import { COURSE_ROADMAP_OPTIONS, getCourseTracks, suggestCourseByAge } from "@/config/course-roadmap";
 import { MOCK_TEAM } from "@/lib/mock-data";
 import { t } from "@/lib/locale";
 import { cn } from "@/lib/utils";
@@ -102,7 +101,10 @@ export function LeadForm({
   );
 
   const courseOptions = useMemo(
-    () => Object.entries(isAr ? COURSE_TYPE_LABELS : COURSE_TYPE_EN_LABELS).map(([value, label]) => ({ value: value as CourseType, label })),
+    () => COURSE_ROADMAP_OPTIONS.map((option) => ({
+      value: option.value,
+      label: isAr ? option.formLabelAr : option.formLabelEn,
+    })),
     [isAr],
   );
 
@@ -118,8 +120,16 @@ export function LeadForm({
       const next = { ...prev, [field]: value } as LeadFormValues;
       if (field === "childAge") {
         const age = parseInt(value as string, 10);
-        if (age >= 8 && age <= 12) next.suggestedCourse = "scratch";
-        else if (age > 12) next.suggestedCourse = "python";
+        if (!Number.isNaN(age)) {
+          next.suggestedCourse = suggestCourseByAge(age, next.hasPriorExperience);
+        }
+      }
+
+      if (field === "hasPriorExperience") {
+        const age = parseInt(next.childAge, 10);
+        if (!Number.isNaN(age)) {
+          next.suggestedCourse = suggestCourseByAge(age, Boolean(value));
+        }
       }
       return next;
     });
@@ -196,7 +206,14 @@ export function LeadForm({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField label={t(locale, "اسم الطفل *", "Child name *")} value={form.childName} onChange={(value) => updateField("childName", value)} placeholder={t(locale, "مثال: يوسف", "Example: Youssef")} />
             <FormField label={t(locale, "العمر *", "Age *")} type="number" value={form.childAge} onChange={(value) => updateField("childAge", value)} placeholder="10" min={4} max={18} />
-            <FormSelect label={t(locale, "الكورس المقترح", "Suggested course")} value={form.suggestedCourse} onChange={(value) => updateField("suggestedCourse", value)} options={courseOptions} placeholder={t(locale, "يتحدد تلقائياً حسب العمر", "Auto-selected based on age")} />
+            <div className="space-y-2">
+              <FormSelect label={t(locale, "الكورس المقترح", "Suggested course")} value={form.suggestedCourse} onChange={(value) => updateField("suggestedCourse", value)} options={courseOptions} placeholder={t(locale, "يتحدد تلقائياً حسب العمر", "Auto-selected based on age")} />
+              {form.suggestedCourse ? (
+                <p className="text-xs leading-5 text-muted-foreground">
+                  {getCourseTracks(form.suggestedCourse, locale).join(" • ")}
+                </p>
+              ) : null}
+            </div>
             <FormField label={t(locale, "اهتمامات الطفل", "Child interests")} value={form.childInterests} onChange={(value) => updateField("childInterests", value)} placeholder={t(locale, "ألعاب، برمجة، تصميم...", "Games, coding, design...")} />
 
             <div className="flex flex-wrap items-center gap-6 sm:col-span-2">

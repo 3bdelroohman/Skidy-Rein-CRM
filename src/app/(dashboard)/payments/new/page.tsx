@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, ReceiptText } from "lucide-react";
+import { ArrowLeft, ArrowRight, ReceiptText, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
+
 import { PageStateCard } from "@/components/shared/page-state";
 import { canManagePaymentsForUser } from "@/config/roles";
 import { useCurrentUser } from "@/providers/user-provider";
@@ -17,6 +18,12 @@ import { cn } from "@/lib/utils";
 
 const STATUS_OPTIONS: PaymentStatus[] = ["pending", "paid", "partial", "overdue"];
 const METHOD_OPTIONS: Array<PaymentMethod | ""> = ["", "instapay", "bank_transfer", "wallet", "cash", "card"];
+
+function normalizeSessionBlock(value: string): number {
+  const parsed = Number(value || 4);
+  if (!Number.isFinite(parsed)) return 4;
+  return Math.max(4, Math.ceil(parsed / 4) * 4);
+}
 
 export default function NewPaymentPage() {
   const locale = useUIStore((state) => state.locale);
@@ -43,7 +50,13 @@ export default function NewPaymentPage() {
     listStudents().then(setStudents);
   }, []);
 
-  const selectedStudent = useMemo(() => students.find((student) => student.id === form.studentId) ?? null, [students, form.studentId]);
+  const selectedStudent = useMemo(
+    () => students.find((student) => student.id === form.studentId) ?? null,
+    [students, form.studentId],
+  );
+  const normalizedSessions = useMemo(() => normalizeSessionBlock(form.sessionsCovered), [form.sessionsCovered]);
+  const amountNumber = Number(form.amount || 0);
+  const hasRoundedSessions = normalizedSessions !== Number(form.sessionsCovered || 0);
 
   if (!canManage) {
     return (
@@ -67,15 +80,20 @@ export default function NewPaymentPage() {
       return;
     }
 
+    if (!Number.isFinite(amountNumber) || amountNumber <= 0) {
+      toast.error(t(locale, "أدخل مبلغًا صحيحًا أكبر من صفر", "Enter a valid amount greater than zero"));
+      return;
+    }
+
     setSaving(true);
     try {
       const created = await createPayment({
         studentId: form.studentId,
-        amount: Number(form.amount || 0),
+        amount: amountNumber,
         status: form.status,
         method: form.method || null,
         dueDate: form.dueDate,
-        sessionsCovered: Number(form.sessionsCovered || 4),
+        sessionsCovered: normalizedSessions,
         blockStartDate: form.blockStartDate || null,
         blockEndDate: form.blockEndDate || null,
         deferredUntil: form.deferredUntil || null,
@@ -83,6 +101,8 @@ export default function NewPaymentPage() {
       });
       toast.success(t(locale, "تم إنشاء الدفعة بنجاح", "Payment created successfully"));
       router.push(`/payments/${created.id}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t(locale, "تعذر إنشاء الدفعة", "Could not create payment"));
     } finally {
       setSaving(false);
     }
@@ -91,12 +111,12 @@ export default function NewPaymentPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <button onClick={() => router.push('/payments')} className="rounded-xl p-2 text-muted-foreground transition-colors hover:bg-muted">
+        <button onClick={() => router.push("/payments")} className="rounded-xl p-2 text-muted-foreground transition-colors hover:bg-muted">
           {isAr ? <ArrowRight size={20} /> : <ArrowLeft size={20} />}
         </button>
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground"><ReceiptText size={24} className="text-brand-600" />{t(locale, "إضافة دفعة جديدة", "Add new payment")}</h1>
-          <p className="text-sm text-muted-foreground">{t(locale, "الفاتورة الافتراضية تغطي 4 جلسات. إذا أردت 8 أو 12 جلسة فاجعل العدد مضاعفًا لـ 4، ويمكنك كذلك تأجيل الاستحقاق عند الاتفاق مع ولي الأمر.", "The default invoice covers 4 sessions. If you need 8 or 12 sessions, use a multiple of 4. You can also defer the due date when agreed with the parent.")}</p>
+          <p className="text-sm text-muted-foreground">{t(locale, "الفاتورة الافتراضية تغطي 4 جلسات. إذا أدخلت 5 أو 6 جلسات فسيتم تقريبها تلقائيًا إلى أقرب مضاعف لـ 4 حتى يبقى منطق الفوترة ثابتًا وواضحًا.", "The default invoice covers 4 sessions. If you enter 5 or 6 sessions, it will be rounded up to the nearest multiple of 4 so the billing logic stays consistent and clear.")}</p>
         </div>
       </div>
 
@@ -116,9 +136,18 @@ export default function NewPaymentPage() {
               <input type="number" min="1" value={form.amount} onChange={(event) => setForm((prev) => ({ ...prev, amount: event.target.value }))} className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground" />
             </Field>
             <Field label={t(locale, "عدد الجلسات", "Sessions covered")}>
-              <input type="number" min="4" step="4" value={form.sessionsCovered} onChange={(event) => setForm((prev) => ({ ...prev, sessionsCovered: event.target.value }))} className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground" />
+              <input type="number" min="4" step="1" value={form.sessionsCovered} onChange={(event) => setForm((prev) => ({ ...prev, sessionsCovered: event.target.value }))} className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground" />
             </Field>
           </div>
+
+          {hasRoundedSessions ? (
+            <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
+              <TriangleAlert size={18} className="mt-0.5 shrink-0" />
+              <p>
+                {t(locale, `سيتم إصدار الفاتورة على ${normalizedSessions} جلسات بدل ${form.sessionsCovered} لأن دورة الفوترة معتمدة على مضاعفات 4 جلسات.`, `The invoice will be issued for ${normalizedSessions} sessions instead of ${form.sessionsCovered}, because the billing cycle is locked to multiples of 4 sessions.`)}
+              </p>
+            </div>
+          ) : null}
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label={t(locale, "الحالة", "Status")}>
@@ -146,7 +175,7 @@ export default function NewPaymentPage() {
             </Field>
           </div>
 
-          <Field label={t(locale, "تأجيل الدفع حتى", "Deferred until")}> 
+          <Field label={t(locale, "تأجيل الدفع حتى", "Deferred until")}>
             <input type="date" value={form.deferredUntil} onChange={(event) => setForm((prev) => ({ ...prev, deferredUntil: event.target.value }))} className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground" />
           </Field>
 
@@ -159,7 +188,7 @@ export default function NewPaymentPage() {
           <h2 className="text-lg font-bold text-foreground">{t(locale, "ملخص سريع", "Quick summary")}</h2>
           <SummaryRow label={t(locale, "الطالب", "Student")} value={selectedStudent?.fullName ?? "—"} />
           <SummaryRow label={t(locale, "ولي الأمر", "Parent")} value={selectedStudent?.parentName ?? "—"} />
-          <SummaryRow label={t(locale, "الفوترة", "Billing")} value={t(locale, `باقة ${form.sessionsCovered} جلسات`, `${form.sessionsCovered}-session block`)} />
+          <SummaryRow label={t(locale, "الفوترة", "Billing")} value={t(locale, `باقة ${normalizedSessions} جلسات`, `${normalizedSessions}-session block`)} />
           <SummaryRow label={t(locale, "المبلغ", "Amount")} value={form.amount ? `${form.amount} ${isAr ? "ج.م" : "EGP"}` : "—"} />
           <SummaryRow label={t(locale, "الاستحقاق", "Due date")} value={form.dueDate || "—"} />
           <SummaryRow label={t(locale, "التأجيل", "Deferred until")} value={form.deferredUntil || t(locale, "بدون تأجيل", "No deferment")} />

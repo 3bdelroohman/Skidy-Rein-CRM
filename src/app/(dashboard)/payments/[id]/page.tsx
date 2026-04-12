@@ -3,12 +3,33 @@
 import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, CalendarDays, ReceiptText, UserRound, Wallet } from "lucide-react";
+import {
+  Archive,
+  ArchiveRestore,
+  ArrowLeft,
+  ArrowRight,
+  CalendarDays,
+  ReceiptText,
+  Trash2,
+  UserRound,
+  Wallet,
+} from "lucide-react";
 import { toast } from "sonner";
+
 import { formatCurrencyEgp, formatDate } from "@/lib/formatters";
 import { getPaymentMethodLabel, getPaymentStatusLabel, t } from "@/lib/locale";
 import { cn } from "@/lib/utils";
-import { getBillingCycleText, getPaymentDetails, getPaymentDisplayState, getPaymentEffectiveDueDate, updatePaymentStatus } from "@/services/payments.service";
+import {
+  archivePayment,
+  deletePayment,
+  getBillingCycleText,
+  getPaymentArchiveState,
+  getPaymentDetails,
+  getPaymentDisplayState,
+  getPaymentEffectiveDueDate,
+  restoreArchivedPayment,
+  updatePaymentStatus,
+} from "@/services/payments.service";
 import { useUIStore } from "@/stores/ui-store";
 import type { PaymentDetails } from "@/types/crm";
 import type { PaymentMethod, PaymentStatus } from "@/types/common.types";
@@ -17,6 +38,7 @@ import { useCurrentUser } from "@/providers/user-provider";
 import { canAccessPaymentsForUser, canManagePaymentsForUser } from "@/config/roles";
 
 type DisplayStatus = PaymentStatus | "deferred";
+type RecordAction = "archive" | "restore" | "delete" | null;
 
 const STATUS_META: Record<DisplayStatus, { bg: string; color: string }> = {
   paid: { bg: "#ECFDF5", color: "#059669" },
@@ -49,9 +71,11 @@ export default function PaymentDetailsPage({ params }: { params: Promise<{ id: s
   const [payment, setPayment] = useState<PaymentDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<PaymentStatus | null>(null);
+  const [recordAction, setRecordAction] = useState<RecordAction>(null);
 
   useEffect(() => {
     let isMounted = true;
+
     async function load() {
       setLoading(true);
       const data = await getPaymentDetails(id);
@@ -60,26 +84,96 @@ export default function PaymentDetailsPage({ params }: { params: Promise<{ id: s
         setLoading(false);
       }
     }
-    if (canAccess) void load();
-    else setLoading(false);
+
+    if (canAccess) {
+      void load();
+    } else {
+      setLoading(false);
+    }
+
     return () => {
       isMounted = false;
     };
   }, [id, canAccess]);
+
+  async function refreshPayment() {
+    const refreshed = await getPaymentDetails(id);
+    setPayment(refreshed);
+  }
 
   async function handleStatusChange(status: PaymentStatus, method?: PaymentMethod | null) {
     try {
       setSaving(status);
       const updated = await updatePaymentStatus(id, status, method);
       if (updated) {
-        const refreshed = await getPaymentDetails(id);
-        setPayment(refreshed);
+        await refreshPayment();
         toast.success(t(locale, "تم تحديث حالة الدفع", "Payment status updated"));
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t(locale, "تعذر تحديث الدفعة", "Could not update payment"));
     } finally {
       setSaving(null);
+    }
+  }
+
+  async function handleArchive() {
+    if (!payment) return;
+    const confirmed = window.confirm(
+      t(
+        locale,
+        "سيتم إخفاء هذه الدفعة من قوائم المدفوعات مع بقاء السجل محفوظًا. هل تريد المتابعة؟",
+        "This payment will be hidden from payment lists while the record stays محفوظ. Continue?",
+      ),
+    );
+    if (!confirmed) return;
+
+    try {
+      setRecordAction("archive");
+      await archivePayment(payment.id, user?.fullNameAr ?? user?.fullName ?? user?.email ?? null);
+      toast.success(t(locale, "تمت أرشفة الدفعة", "Payment archived"));
+      router.push("/payments");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t(locale, "تعذر أرشفة الدفعة", "Could not archive payment"));
+    } finally {
+      setRecordAction(null);
+    }
+  }
+
+  async function handleRestore() {
+    if (!payment) return;
+
+    try {
+      setRecordAction("restore");
+      await restoreArchivedPayment(payment.id);
+      await refreshPayment();
+      toast.success(t(locale, "تمت استعادة الدفعة للأرشيف النشط", "Payment restored to the active list"));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t(locale, "تعذر استعادة الدفعة", "Could not restore payment"));
+    } finally {
+      setRecordAction(null);
+    }
+  }
+
+  async function handleDelete() {
+    if (!payment) return;
+    const confirmed = window.confirm(
+      t(
+        locale,
+        "سيتم حذف هذه الدفعة نهائيًا من قاعدة البيانات. هذا الإجراء لا يمكن التراجع عنه. هل تريد المتابعة؟",
+        "This payment will be permanently deleted from the database and cannot be undone. Continue?",
+      ),
+    );
+    if (!confirmed) return;
+
+    try {
+      setRecordAction("delete");
+      await deletePayment(payment.id);
+      toast.success(t(locale, "تم حذف الدفعة نهائيًا", "Payment permanently deleted"));
+      router.push("/payments");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t(locale, "تعذر حذف الدفعة", "Could not delete payment"));
+    } finally {
+      setRecordAction(null);
     }
   }
 
@@ -131,9 +225,22 @@ export default function PaymentDetailsPage({ params }: { params: Promise<{ id: s
 
   const displayStatus = getPaymentDisplayState(payment);
   const meta = STATUS_META[displayStatus];
+  const archiveState = getPaymentArchiveState(payment);
+  const isArchived = archiveState.archived;
 
   return (
     <div className="space-y-6">
+      {isArchived ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
+          <p className="font-semibold">{t(locale, "هذه الدفعة مؤرشفة حاليًا", "This payment is currently archived")}</p>
+          <p className="mt-1 leading-6">
+            {t(locale, "تم إخفاؤها من قائمة المدفوعات النشطة.", "It is hidden from the active payments list.")}
+            {archiveState.archivedAt ? ` ${t(locale, "تاريخ الأرشفة:", "Archived at:")} ${formatDate(archiveState.archivedAt, locale)}.` : ""}
+            {archiveState.archivedBy ? ` ${t(locale, "بواسطة:", "By:")} ${archiveState.archivedBy}.` : ""}
+          </p>
+        </div>
+      ) : null}
+
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <button onClick={() => router.push("/payments")} className="rounded-xl p-2 text-muted-foreground transition-colors hover:bg-muted">
@@ -190,7 +297,7 @@ export default function PaymentDetailsPage({ params }: { params: Promise<{ id: s
             </div>
           </div>
 
-          {canManage ? (
+          {canManage && !isArchived ? (
             <div className="rounded-2xl border border-border bg-card p-5">
               <h3 className="mb-4 flex items-center gap-2 font-bold text-foreground"><Wallet size={18} className="text-brand-600" />{t(locale, "إجراءات سريعة", "Quick actions")}</h3>
               <div className="flex flex-wrap gap-2">
@@ -250,6 +357,48 @@ export default function PaymentDetailsPage({ params }: { params: Promise<{ id: s
               <InfoRow label={t(locale, "مرجع الطالب", "Student record")} value={payment.studentId ? t(locale, "متوفر", "Available") : t(locale, "غير مرتبط", "Unlinked")} align={isAr ? "left" : "right"} />
             </div>
           </div>
+
+          {canManage ? (
+            <div className="rounded-2xl border border-border bg-card p-5">
+              <h3 className="mb-4 font-bold text-foreground">{t(locale, "إدارة السجل", "Record management")}</h3>
+              <div className="space-y-3">
+                {isArchived ? (
+                  <button
+                    type="button"
+                    onClick={handleRestore}
+                    disabled={recordAction === "restore"}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <ArchiveRestore size={16} />
+                    {recordAction === "restore" ? t(locale, "جارِ الاستعادة...", "Restoring...") : t(locale, "استعادة من الأرشيف", "Restore from archive")}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleArchive}
+                    disabled={recordAction === "archive"}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <Archive size={16} />
+                    {recordAction === "archive" ? t(locale, "جارِ الأرشفة...", "Archiving...") : t(locale, "أرشفة الدفعة", "Archive payment")}
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={recordAction === "delete"}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Trash2 size={16} />
+                  {recordAction === "delete" ? t(locale, "جارِ الحذف...", "Deleting...") : t(locale, "حذف نهائي", "Permanent delete")}
+                </button>
+              </div>
+              <p className="mt-3 text-xs leading-6 text-muted-foreground">
+                {t(locale, "الأرشفة تخفي السجل من القائمة النشطة مع الاحتفاظ به. الحذف النهائي يزيل السجل من قاعدة البيانات.", "Archiving hides the record from the active list while keeping it. Permanent delete removes it from the database.")}
+              </p>
+            </div>
+          ) : null}
 
           {payment.studentId ? (
             <Link href={`/students/${payment.studentId}`} className="block rounded-2xl border border-border bg-card p-5 transition-colors hover:bg-muted/30">

@@ -3,10 +3,17 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, ArrowLeft, ArrowRight, PlusCircle, Search, Wallet } from "lucide-react";
+
 import { formatCurrencyEgp, formatDate } from "@/lib/formatters";
-import { getPaymentMethodLabel, getPaymentStatusLabel, t } from "@/lib/locale";
+import { getPaymentStatusLabel, t } from "@/lib/locale";
 import { cn } from "@/lib/utils";
-import { getBillingCycleText, getPaymentDisplayState, getPaymentEffectiveDueDate, getPaymentsSummary, listPayments } from "@/services/payments.service";
+import {
+  getBillingCycleText,
+  getPaymentDisplayState,
+  getPaymentEffectiveDueDate,
+  getPaymentsSummary,
+  listPayments,
+} from "@/services/payments.service";
 import { useUIStore } from "@/stores/ui-store";
 import type { PaymentItem } from "@/types/crm";
 import type { PaymentStatus } from "@/types/common.types";
@@ -51,6 +58,7 @@ export default function PaymentsPage() {
 
   useEffect(() => {
     let isMounted = true;
+
     async function load() {
       setLoading(true);
       const [data, nextSummary] = await Promise.all([listPayments(), getPaymentsSummary()]);
@@ -60,9 +68,11 @@ export default function PaymentsPage() {
         setLoading(false);
       }
     }
+
     if (canAccess) {
       void load();
     }
+
     return () => {
       isMounted = false;
     };
@@ -107,6 +117,9 @@ export default function PaymentsPage() {
     );
   }
 
+  const hasRealPayments = payments.length > 0;
+  const hasFilteredResults = filtered.length > 0;
+
   return (
     <div className="space-y-6">
       <div className="rounded-3xl border border-border bg-card p-6">
@@ -117,7 +130,11 @@ export default function PaymentsPage() {
               {t(locale, "المدفوعات والفوترة", "Payments & billing")}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              {t(locale, "الفاتورة الافتراضية مبنية على كل 4 جلسات، ويمكن تأجيل الاستحقاق عند الاتفاق مع ولي الأمر.", "The default billing cycle is one invoice for every 4 sessions, with flexible deferral when agreed with the parent.")}
+              {t(
+                locale,
+                "الفاتورة الافتراضية مبنية على كل 4 جلسات، ويمكن تأجيل الاستحقاق عند الاتفاق مع ولي الأمر. السجلات المؤرشفة لا تظهر هنا حتى يبقى التشغيل اليومي نظيفًا.",
+                "The default billing cycle is one invoice for every 4 sessions, with flexible deferral when agreed with the parent. Archived records are hidden from this list to keep daily operations clean.",
+              )}
             </p>
           </div>
           {canManage ? (
@@ -170,6 +187,22 @@ export default function PaymentsPage() {
             <div className="rounded-2xl border border-border bg-card p-12 text-center text-muted-foreground">
               {t(locale, "جارِ تحميل بيانات المدفوعات...", "Loading payments...")}
             </div>
+          ) : !hasRealPayments ? (
+            <PageStateCard
+              icon={AlertCircle}
+              titleAr="لا توجد مدفوعات حقيقية مسجلة بعد"
+              titleEn="No real payments have been recorded yet"
+              descriptionAr="القائمة الآن صادقة بالكامل: لا توجد بيانات تجريبية معروضة. ابدأ بإضافة أول دفعة حقيقية وسيظهر أثرها هنا وفي الفواتير والتقارير."
+              descriptionEn="This list is now fully honest: no demo data is shown. Create the first real payment and it will appear here, in invoices, and in reports."
+              actionHref={canManage ? "/payments/new" : undefined}
+              actionLabelAr="إضافة أول دفعة"
+              actionLabelEn="Create the first payment"
+            />
+          ) : !hasFilteredResults ? (
+            <div className="flex items-center justify-center gap-2 rounded-2xl border border-border bg-card p-12 text-muted-foreground">
+              <AlertCircle size={18} />
+              {t(locale, "لا توجد مدفوعات مطابقة للفلاتر الحالية", "No payments match the current filters")}
+            </div>
           ) : (
             <div className="overflow-hidden rounded-2xl border border-border bg-card">
               <div className="overflow-x-auto">
@@ -190,7 +223,7 @@ export default function PaymentsPage() {
                       const displayStatus = getPaymentDisplayState(payment);
                       const meta = PAYMENT_STATUS_META[displayStatus];
                       return (
-                        <tr key={payment.id} className={cn("border-b border-border last:border-0 transition-colors hover:bg-muted/30", displayStatus === "overdue" && "bg-danger-50/50") }>
+                        <tr key={payment.id} className={cn("border-b border-border last:border-0 transition-colors hover:bg-muted/30", displayStatus === "overdue" && "bg-danger-50/50")}>
                           <td className="px-4 py-3"><p className="font-semibold text-foreground">{payment.studentName}</p></td>
                           <td className="px-4 py-3 text-foreground">{payment.parentName}</td>
                           <td className="px-4 py-3 text-xs text-muted-foreground">{getBillingCycleText(payment, locale)}</td>
@@ -213,12 +246,6 @@ export default function PaymentsPage() {
                   </tbody>
                 </table>
               </div>
-              {!loading && filtered.length === 0 && (
-                <div className="flex items-center justify-center gap-2 p-12 text-muted-foreground">
-                  <AlertCircle size={18} />
-                  {t(locale, "لا توجد مدفوعات مطابقة للفلاتر الحالية", "No payments match the current filters")}
-                </div>
-              )}
             </div>
           )}
         </div>

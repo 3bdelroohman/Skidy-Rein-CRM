@@ -5,7 +5,8 @@ import Link from "next/link";
 import { ArrowLeft, ArrowRight, CalendarDays, GraduationCap, MessageCircle, Phone, UserCircle } from "lucide-react";
 import { useUIStore } from "@/stores/ui-store";
 import { STUDENT_STATUS_META, getMetaLabel } from "@/config/status-meta";
-import { getCourseLabel, t } from "@/lib/locale";
+import { getCourseFormLabel, getCourseTracks } from "@/config/course-roadmap";
+import { t } from "@/lib/locale";
 import { formatCurrencyEgp, formatDate } from "@/lib/formatters";
 import { getStudentDetails } from "@/services/relations.service";
 import { LoadingState, PageStateCard } from "@/components/shared/page-state";
@@ -58,6 +59,7 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
   }
 
   const status = STUDENT_STATUS_META[student.status];
+  const courseTracks = student.currentCourse ? getCourseTracks(student.currentCourse, locale) : [];
 
   return (
     <div className="space-y-6">
@@ -81,12 +83,24 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Info label={t(locale, "العمر", "Age")} value={`${student.age} ${t(locale, "سنة", "years")}`} />
             <Info label={t(locale, "الحالة", "Status")} value={getMetaLabel(status, locale)} />
-            <Info label={t(locale, "الكورس الحالي", "Current course")} value={student.currentCourse ? getCourseLabel(student.currentCourse, locale) : t(locale, "غير محدد", "Not set")} />
+            <Info label={t(locale, "الكورس الحالي", "Current course")} value={student.currentCourse ? getCourseFormLabel(student.currentCourse, locale) : t(locale, "غير محدد", "Not set")} />
             <Info label={t(locale, "الكلاس", "Class")} value={student.className ?? t(locale, "غير مسجل", "Not assigned")} />
             <Info label={t(locale, "تاريخ الالتحاق", "Enrollment date")} value={formatDate(student.enrollmentDate, locale)} />
             <Info label={t(locale, "عدد الحصص", "Sessions attended")} value={student.sessionsAttended.toString()} />
             <Info label={t(locale, "إجمالي المدفوع", "Total paid")} value={formatCurrencyEgp(student.totalPaid, locale)} />
           </div>
+          {courseTracks.length > 0 ? (
+            <div className="mt-4 border-t border-border pt-4">
+              <p className="mb-2 text-xs text-muted-foreground">{t(locale, "المسارات المرتبطة", "Mapped tracks")}</p>
+              <div className="flex flex-wrap gap-2">
+                {courseTracks.map((track) => (
+                  <span key={track} className="rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 dark:bg-brand-950 dark:text-brand-300">
+                    {track}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="space-y-4">
@@ -143,7 +157,7 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
                       <p className="font-semibold text-foreground">{session.className}</p>
                       <p className="mt-1 text-xs text-muted-foreground">{session.startTime} → {session.endTime}</p>
                     </div>
-                    <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] text-muted-foreground">{getCourseLabel(session.course, locale)}</span>
+                    <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] text-muted-foreground">{getCourseFormLabel(session.course, locale)}</span>
                   </div>
                 </Link>
               ))}

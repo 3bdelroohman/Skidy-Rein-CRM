@@ -1,7 +1,6 @@
 import { createBrowserClient } from "@supabase/ssr";
 import type { Database } from "@/types/database.types";
-import type { ParentListItem } from "@/types/crm";
-import { MOCK_PARENTS } from "@/lib/mock-data";
+import type { CreateParentInput, ParentListItem } from "@/types/crm";
 import { isBrowser, readStorage, writeStorage } from "@/services/storage";
 
 const PARENTS_KEY = "skidy.crm.parents";
@@ -13,29 +12,16 @@ function getSupabaseClient() {
   return createBrowserClient<Database>(url, key);
 }
 
-
-function isDemoModeEnabled(): boolean {
-  return process.env.NEXT_PUBLIC_ALLOW_DEMO_FALLBACK === "true";
-}
-
-function shouldUseDemoFallback(): boolean {
-  return !getSupabaseClient() && isDemoModeEnabled();
-}
-
 function sortParents(items: ParentListItem[]): ParentListItem[] {
   return [...items].sort((a, b) => a.fullName.localeCompare(b.fullName, "ar"));
 }
 
-function mockParents(): ParentListItem[] {
-  return MOCK_PARENTS.map((parent) => ({ ...parent }));
-}
-
 function asString(value: unknown, fallback = ""): string {
-  return typeof value === "string" && value.trim().length > 0 ? value : fallback;
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback;
 }
 
 function asNullableString(value: unknown): string | null {
-  return typeof value === "string" && value.trim().length > 0 ? value : null;
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
 function asNumber(value: unknown, fallback = 0): number {
@@ -47,31 +33,37 @@ function asNumber(value: unknown, fallback = 0): number {
   return fallback;
 }
 
+function normalizePhone(value: string | null | undefined): string {
+  return (value ?? "").replace(/\D/g, "").replace(/^20/, "");
+}
+
+function normalizeName(value: string | null | undefined): string {
+  return (value ?? "")
+    .toLowerCase()
+    .replace(/[\u064B-\u065F]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function mapRow(
   row: Database["public"]["Tables"]["parents"]["Row"] | Record<string, unknown>,
 ): ParentListItem {
   const record = row as Record<string, unknown>;
-  const fallback = MOCK_PARENTS.find(
-    (parent) =>
-      parent.fullName === asString(record.full_name) ||
-      parent.phone === asString(record.phone),
-  );
 
   return {
     id: asString(record.id, crypto.randomUUID()),
     fullName: asString(record.full_name ?? record.fullName, "ولي أمر غير محدد"),
     phone: asString(record.phone, "—"),
-    whatsapp: asNullableString(record.whatsapp) ?? fallback?.whatsapp ?? null,
-    email: asNullableString(record.email) ?? fallback?.email ?? null,
-    city: asNullableString(record.city) ?? fallback?.city ?? null,
-    childrenCount: asNumber(record.children_count ?? record.childrenCount, fallback?.childrenCount ?? 0),
-    children: fallback?.children ?? [],
+    whatsapp: asNullableString(record.whatsapp),
+    email: asNullableString(record.email),
+    city: asNullableString(record.city),
+    childrenCount: asNumber(record.children_count ?? record.childrenCount, 0),
+    children: [],
   };
 }
 
 function getLocalParents(): ParentListItem[] {
-  const seed = shouldUseDemoFallback() ? mockParents() : ([] as ParentListItem[]);
-  return sortParents(readStorage(PARENTS_KEY, seed));
+  return sortParents(readStorage(PARENTS_KEY, [] as ParentListItem[]));
 }
 
 function saveLocalParents(items: ParentListItem[]): void {
@@ -82,10 +74,25 @@ function clearLocalParents(): void {
   writeStorage(PARENTS_KEY, []);
 }
 
+function findExistingParent(items: ParentListItem[], input: CreateParentInput): ParentListItem | null {
+  const phone = normalizePhone(input.phone);
+  const whatsapp = normalizePhone(input.whatsapp);
+  const name = normalizeName(input.fullName);
+
+  return (
+    items.find((parent) => phone.length > 0 && normalizePhone(parent.phone) === phone) ??
+    items.find((parent) => whatsapp.length > 0 && normalizePhone(parent.whatsapp) === whatsapp) ??
+    items.find((parent) => name.length > 0 && normalizeName(parent.fullName) === name && phone.length > 0 && normalizePhone(parent.phone) === phone) ??
+    null
+  );
+}
+
 export async function listParents(): Promise<ParentListItem[]> {
-  const demoFallback = shouldUseDemoFallback() ? getLocalParents() : [];
   const supabase = getSupabaseClient();
-  if (!supabase) return demoFallback;
+  if (!supabase) {
+    clearLocalParents();
+    return [];
+  }
 
   try {
     const { data, error } = await supabase
@@ -117,4 +124,48 @@ export async function listParents(): Promise<ParentListItem[]> {
 export async function getParentById(id: string): Promise<ParentListItem | null> {
   const items = await listParents();
   return items.find((parent) => parent.id === id) ?? null;
+}
+
+export async function createParent(input: CreateParentInput): Promise<ParentListItem> {
+  const fullName = input.fullName.trim();
+  const phone = input.phone.trim();
+
+  if (!fullName || !phone) {
+    throw new Error("اسم ولي الأمر ورقم الهاتف مطلوبان.");
+  }
+
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    throw new Error("تعذر الاتصال بقاعدة البيانات. تأكد من إعدادات Supabase ثم أعد المحاولة.");
+  }
+
+  const existing = findExistingParent(await listParents(), input);
+  if (existing) {
+    return existing;
+  }
+
+  const payload: Database["public"]["Tables"]["parents"]["Insert"] = {
+    full_name: fullName,
+    phone,
+    whatsapp: input.whatsapp?.trim() || phone,
+    email: input.email?.trim() || null,
+    city: input.city?.trim() || null,
+    children_count: input.childrenCount ?? 0,
+    created_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabase
+    .from("parents")
+    .insert(payload)
+    .select("*")
+    .single();
+
+  if (error || !data) {
+    console.error("[parents] create failed", error);
+    throw new Error(error?.message || "تعذر إنشاء سجل ولي الأمر.");
+  }
+
+  const created = mapRow(data);
+  saveLocalParents([created, ...getLocalParents().filter((item) => item.id !== created.id)]);
+  return created;
 }

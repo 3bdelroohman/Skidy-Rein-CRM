@@ -11,6 +11,7 @@ import type {
   LeadStage,
   LeadTemperature,
   LossReason,
+  PaymentMethod,
   PaymentStatus,
   Priority,
   StudentStatus,
@@ -119,6 +120,7 @@ export interface Database {
           id: string;
           full_name: string | null;
           age: number | null;
+          parent_id: string | null;
           parent_name: string | null;
           parent_phone: string | null;
           status: StudentStatus | null;
@@ -158,9 +160,12 @@ export interface Database {
           student_id: string | null;
           amount: number | null;
           status: PaymentStatus | null;
+          method: PaymentMethod | null;
           due_date: string | null;
           paid_at: string | null;
+          notes: string | null;
           created_at: string | null;
+          updated_at: string | null;
         };
         Insert: Partial<Database["public"]["Tables"]["payments"]["Row"]> & {
           id?: string;

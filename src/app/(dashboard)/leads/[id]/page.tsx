@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/providers/user-provider";
 import { useUIStore } from "@/stores/ui-store";
 import { getLeadById, listLeadActivities, updateLeadStage } from "@/services/leads.service";
+import { getEnrollmentTargetsForLead } from "@/services/enrollment.service";
 import {
   createFollowUp,
   listFollowUpsByLead,
@@ -47,6 +48,7 @@ export default function LeadDetailsPage({ params }: { params: Promise<{ id: stri
   const [lead, setLead] = useState<LeadListItem | null>(null);
   const [activities, setActivities] = useState<LeadActivityItem[]>([]);
   const [followUps, setFollowUps] = useState<FollowUpItem[]>([]);
+  const [enrollmentTargets, setEnrollmentTargets] = useState<{ parentId: string | null; studentId: string | null }>({ parentId: null, studentId: null });
   const [loading, setLoading] = useState(true);
   const [changingStage, setChangingStage] = useState<string | null>(null);
   const [savingFollowUp, setSavingFollowUp] = useState(false);
@@ -67,10 +69,12 @@ export default function LeadDetailsPage({ params }: { params: Promise<{ id: stri
         listLeadActivities(id),
         listFollowUpsByLead(id),
       ]);
+      const targets = leadData?.stage === "won" ? await getEnrollmentTargetsForLead(id) : { parentId: null, studentId: null };
       if (isMounted) {
         setLead(leadData);
         setActivities(activityData);
         setFollowUps(followUpData);
+        setEnrollmentTargets(targets);
         setLoading(false);
       }
     }
@@ -97,14 +101,20 @@ export default function LeadDetailsPage({ params }: { params: Promise<{ id: stri
   const handleStageChange = async (stage: LeadListItem["stage"]) => {
     if (!lead) return;
     setChangingStage(stage);
-    const updated = await updateLeadStage(id, stage, user.fullNameAr || user.fullName);
-    const refreshedActivities = await listLeadActivities(id);
-    if (updated) {
-      setLead(updated);
-      setActivities(refreshedActivities);
-      toast.success(t(locale, `تم نقل العميل إلى ${getStageLabel(stage, locale)}`, `Lead moved to ${getStageLabel(stage, locale)}`));
+    try {
+      const updated = await updateLeadStage(id, stage, user.fullNameAr || user.fullName);
+      const refreshedActivities = await listLeadActivities(id);
+      if (updated) {
+        setLead(updated);
+        setActivities(refreshedActivities);
+        setEnrollmentTargets(stage === "won" ? await getEnrollmentTargetsForLead(id) : { parentId: null, studentId: null });
+        toast.success(t(locale, `تم نقل العميل إلى ${getStageLabel(stage, locale)}`, `Lead moved to ${getStageLabel(stage, locale)}`));
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t(locale, "تعذر تحديث المرحلة", "Failed to update stage"));
+    } finally {
+      setChangingStage(null);
     }
-    setChangingStage(null);
   };
 
 
@@ -198,6 +208,33 @@ export default function LeadDetailsPage({ params }: { params: Promise<{ id: stri
           </Link>
         </div>
       </div>
+
+      {lead.stage === "won" ? (
+        <div className="rounded-2xl border border-success-200 bg-success-50/70 p-4 dark:border-success-900 dark:bg-success-950/30">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-semibold text-foreground">{t(locale, "تم تحويل العميل إلى تسجيل فعلي", "Lead has been converted to a real enrollment")}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {enrollmentTargets.studentId || enrollmentTargets.parentId
+                  ? t(locale, "تم العثور على ملفات الطالب وولي الأمر المرتبطة بهذا العميل.", "Linked student and parent profiles were found for this lead.")
+                  : t(locale, "تم نقل العميل إلى won لكن لم يتم العثور على روابط الملفين بعد. حدّث الصفحة بعد ثوانٍ قليلة.", "The lead is marked won, but enrollment links are not visible yet. Refresh after a few seconds.")}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {enrollmentTargets.studentId ? (
+                <Link href={`/students/${enrollmentTargets.studentId}`} className="rounded-xl bg-brand-700 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-brand-600">
+                  {t(locale, "فتح ملف الطالب", "Open student profile")}
+                </Link>
+              ) : null}
+              {enrollmentTargets.parentId ? (
+                <Link href={`/parents/${enrollmentTargets.parentId}`} className="rounded-xl border border-border bg-background px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted">
+                  {t(locale, "فتح ملف ولي الأمر", "Open parent profile")}
+                </Link>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">

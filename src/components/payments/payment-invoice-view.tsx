@@ -1,141 +1,191 @@
+"use client";
+
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 
-import { getPaymentDetails } from "@/services/payments.service";
 import { InvoiceToolbar } from "@/components/payments/invoice-toolbar";
+import { LoadingState, PageStateCard } from "@/components/shared/page-state";
+import { t } from "@/lib/locale";
+import { useUIStore } from "@/stores/ui-store";
+import { getBillingCycleText, getPaymentDetails, getPaymentDisplayState, getPaymentEffectiveDueDate } from "@/services/payments.service";
+import type { PaymentDetails } from "@/types/crm";
 
-type JsonRecord = Record<string, unknown>;
-
-function asRecord(value: unknown): JsonRecord | null {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? (value as JsonRecord)
-    : null;
-}
-
-function asString(value: unknown, fallback = "—"): string {
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    return trimmed.length ? trimmed : fallback;
-  }
-  if (typeof value === "number") return String(value);
-  return fallback;
-}
-
-function asNumber(value: unknown, fallback = 0): number {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : fallback;
-  }
-  return fallback;
-}
-
-function formatCurrencyEgp(value: number): string {
-  return new Intl.NumberFormat("ar-EG", {
+function formatCurrency(value: number, locale: "ar" | "en"): string {
+  return new Intl.NumberFormat(locale === "ar" ? "ar-EG" : "en-US", {
     style: "currency",
     currency: "EGP",
     maximumFractionDigits: 0,
   }).format(value);
 }
 
-function normalizePhone(value: string): string {
-  const digits = value.replace(/\D/g, "");
+function formatDateLabel(value: string | null | undefined, locale: "ar" | "en"): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value.slice(0, 10);
+  return new Intl.DateTimeFormat(locale === "ar" ? "ar-EG" : "en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  }).format(date);
+}
+
+function normalizePhone(value: string | null | undefined): string {
+  const digits = (value ?? "").replace(/\D/g, "");
   if (!digits) return "";
   if (digits.startsWith("20")) return digits;
   if (digits.startsWith("0")) return `20${digits.slice(1)}`;
   return digits;
 }
 
-export async function PaymentInvoiceView({ paymentId }: { paymentId: string }) {
-  const details = await getPaymentDetails(paymentId);
+function getStatusLabel(status: ReturnType<typeof getPaymentDisplayState>, locale: "ar" | "en"): string {
+  const labels = {
+    paid: t(locale, "مدفوع", "Paid"),
+    pending: t(locale, "قيد الانتظار", "Pending"),
+    overdue: t(locale, "متأخر", "Overdue"),
+    partial: t(locale, "مدفوع جزئيًا", "Partially paid"),
+    refunded: t(locale, "مرتجع", "Refunded"),
+    deferred: t(locale, "مؤجل", "Deferred"),
+  } as const;
+  return labels[status];
+}
 
-  if (!details) {
-    notFound();
+function getMethodLabel(method: PaymentDetails["method"], locale: "ar" | "en"): string {
+  if (!method) return t(locale, "لاحقًا", "Later");
+
+  const labels: Record<NonNullable<PaymentDetails["method"]>, string> = {
+    instapay: t(locale, "إنستا باي", "Instapay"),
+    bank_transfer: t(locale, "تحويل بنكي", "Bank transfer"),
+    wallet: t(locale, "محفظة", "Wallet"),
+    cash: t(locale, "كاش", "Cash"),
+    card: t(locale, "بطاقة", "Card"),
+  };
+
+  return labels[method];
+}
+
+export function PaymentInvoiceView({ paymentId }: { paymentId: string }) {
+  const locale = useUIStore((state) => state.locale);
+  const isAr = locale === "ar";
+  const [payment, setPayment] = useState<PaymentDetails | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function load() {
+      setLoading(true);
+      const details = await getPaymentDetails(paymentId);
+      if (isMounted) {
+        setPayment(details);
+        setLoading(false);
+      }
+    }
+
+    void load();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [paymentId]);
+
+  const shareTargets = useMemo(() => {
+    if (!payment) return { whatsappUrl: undefined, mailtoUrl: undefined };
+
+    const parentPhone = payment.parent?.phone ?? payment.student?.parentPhone ?? null;
+    const parentEmail = payment.parent?.email ?? null;
+    const invoiceNumber = payment.invoiceNumber ?? payment.id;
+    const studentName = payment.studentName;
+    const amount = formatCurrency(payment.amount, locale);
+    const sessions = String(payment.sessionsCovered);
+    const effectiveDueDate = formatDateLabel(getPaymentEffectiveDueDate(payment), locale);
+
+    const whatsappMessage = encodeURIComponent(
+      t(
+        locale,
+        `حضرتك، هذه فاتورة ${invoiceNumber} الخاصة بالطالب ${studentName} من Skidy Rein بقيمة ${amount} لعدد ${sessions} جلسات. موعد الاستحقاق الفعلي: ${effectiveDueDate}.`,
+        `Here is invoice ${invoiceNumber} for ${studentName} from Skidy Rein. Amount: ${amount} for ${sessions} sessions. Effective due date: ${effectiveDueDate}.`,
+      ),
+    );
+    const normalizedPhone = normalizePhone(parentPhone);
+    const whatsappUrl = normalizedPhone ? `https://wa.me/${normalizedPhone}?text=${whatsappMessage}` : undefined;
+
+    const mailtoBody = encodeURIComponent(
+      t(
+        locale,
+        `مرحبًا،\n\nهذه فاتورة ${invoiceNumber} الخاصة بالطالب ${studentName}.\nالقيمة: ${amount}\nعدد الجلسات: ${sessions}\nالاستحقاق الفعلي: ${effectiveDueDate}\n\nSkidy Rein`,
+        `Hello,\n\nThis is invoice ${invoiceNumber} for ${studentName}.\nAmount: ${amount}\nSessions: ${sessions}\nEffective due date: ${effectiveDueDate}\n\nSkidy Rein`,
+      ),
+    );
+    const mailtoUrl = parentEmail
+      ? `mailto:${parentEmail}?subject=${encodeURIComponent(`${t(locale, "فاتورة", "Invoice")} ${invoiceNumber} - Skidy Rein`)}&body=${mailtoBody}`
+      : undefined;
+
+    return { whatsappUrl, mailtoUrl };
+  }, [payment, locale]);
+
+  if (loading) {
+    return (
+      <LoadingState
+        titleAr="جارِ تجهيز الفاتورة"
+        titleEn="Preparing invoice"
+        descriptionAr="يتم تحميل بيانات الدفعة والطباعة الآن من السجل الحقيقي."
+        descriptionEn="The real payment record is being loaded for print and sharing."
+      />
+    );
   }
 
-  const detailsRecord = asRecord(details);
-  if (!detailsRecord) {
-    notFound();
+  if (!payment) {
+    return (
+      <PageStateCard
+        variant="warning"
+        titleAr="الفاتورة غير متاحة"
+        titleEn="Invoice not available"
+        descriptionAr="لم يتم العثور على سجل الدفعة المطلوب أو أن السجل لم يعد متاحًا."
+        descriptionEn="The requested payment record was not found or is no longer available."
+        actionHref="/payments"
+        actionLabelAr="العودة إلى المدفوعات"
+        actionLabelEn="Back to payments"
+      />
+    );
   }
 
-  const payment = asRecord(detailsRecord.payment) ?? detailsRecord;
-  const student = asRecord(detailsRecord.student);
-  const parent = asRecord(detailsRecord.parent) ?? asRecord(detailsRecord.guardian);
-
-  const invoiceNumber =
-    asString(payment?.invoiceNumber, "") !== "—"
-      ? asString(payment?.invoiceNumber)
-      : asString(payment?.invoice_number, "") !== "—"
-        ? asString(payment?.invoice_number)
-        : `SKR-${new Date().getFullYear()}-${paymentId.padStart(4, "0")}`;
-
-  const amount = asNumber(payment?.amount);
-  const sessionsCount = asNumber(
-    payment?.sessionsCount ?? payment?.sessions_count ?? payment?.blockSize ?? payment?.block_size,
-    4,
-  );
-  const status = asString(payment?.status, "pending");
-  const method = asString(payment?.method, "لاحقًا");
-  const issuedAt = asString(payment?.created_at ?? payment?.issuedAt ?? payment?.issued_at, new Date().toISOString().slice(0, 10));
-  const dueDate = asString(payment?.dueDate ?? payment?.due_date, "—");
-  const packageStart = asString(payment?.packageStart ?? payment?.package_start ?? payment?.startDate ?? payment?.start_date, "—");
-  const packageEnd = asString(payment?.packageEnd ?? payment?.package_end ?? payment?.endDate ?? payment?.end_date, "—");
-  const deferredUntil = asString(payment?.deferredUntil ?? payment?.deferred_until, "—");
-  const notes = asString(payment?.notes, "—");
-
-  const studentName = asString(student?.name ?? payment?.studentName ?? payment?.student_name, "الطالب");
-  const parentName = asString(parent?.name ?? payment?.parentName ?? payment?.parent_name, "ولي الأمر");
-  const parentPhone = asString(parent?.phone ?? payment?.parentPhone ?? payment?.parent_phone, "");
-  const parentEmail = asString(parent?.email ?? payment?.parentEmail ?? payment?.parent_email, "");
-
-  const whatsappMessage = encodeURIComponent(
-    `حضرتك، هذه فاتورة ${invoiceNumber} الخاصة بالطالب ${studentName} من Skidy Rein بقيمة ${formatCurrencyEgp(amount)} لعدد ${sessionsCount} جلسات.`,
-  );
-  const whatsappUrl = normalizePhone(parentPhone)
-    ? `https://wa.me/${normalizePhone(parentPhone)}?text=${whatsappMessage}`
-    : undefined;
-
-  const mailtoBody = encodeURIComponent(
-    `مرحبًا،
-
-هذه فاتورة ${invoiceNumber} الخاصة بالطالب ${studentName}.
-القيمة: ${formatCurrencyEgp(amount)}
-عدد الجلسات: ${sessionsCount}
-تاريخ الاستحقاق: ${dueDate}
-
-Skidy Rein`,
-  );
-  const mailtoUrl = parentEmail && parentEmail !== "—"
-    ? `mailto:${parentEmail}?subject=${encodeURIComponent(`فاتورة ${invoiceNumber} - Skidy Rein`)}&body=${mailtoBody}`
-    : undefined;
+  const invoiceNumber = payment.invoiceNumber ?? `SKR-${new Date().getFullYear()}-${payment.id.slice(0, 6).toUpperCase()}`;
+  const displayStatus = getPaymentDisplayState(payment);
+  const issuedAt = payment.invoiceIssuedAt ?? payment.paidAt ?? payment.dueDate;
+  const effectiveDueDate = getPaymentEffectiveDueDate(payment);
+  const note = payment.publicNote ?? "—";
+  const parentName = payment.parent?.fullName ?? payment.parentName;
+  const parentPhone = payment.parent?.phone ?? payment.student?.parentPhone ?? "—";
+  const parentEmail = payment.parent?.email ?? "—";
 
   const rows = [
-    ["رقم الفاتورة", invoiceNumber],
-    ["الطالب", studentName],
-    ["ولي الأمر", parentName],
-    ["المبلغ", formatCurrencyEgp(amount)],
-    ["عدد الجلسات", String(sessionsCount)],
-    ["الحالة", status],
-    ["طريقة الدفع", method],
-    ["تاريخ الإصدار", issuedAt],
-    ["تاريخ الاستحقاق", dueDate],
-    ["بداية الباقة", packageStart],
-    ["نهاية الباقة", packageEnd],
-    ["تأجيل الدفع", deferredUntil],
-    ["ملاحظات", notes],
+    [t(locale, "رقم الفاتورة", "Invoice number"), invoiceNumber],
+    [t(locale, "الطالب", "Student"), payment.studentName],
+    [t(locale, "ولي الأمر", "Parent"), parentName],
+    [t(locale, "المبلغ", "Amount"), formatCurrency(payment.amount, locale)],
+    [t(locale, "عدد الجلسات", "Sessions covered"), String(payment.sessionsCovered)],
+    [t(locale, "الحالة", "Status"), getStatusLabel(displayStatus, locale)],
+    [t(locale, "طريقة الدفع", "Payment method"), getMethodLabel(payment.method, locale)],
+    [t(locale, "تاريخ الإصدار", "Issued at"), formatDateLabel(issuedAt, locale)],
+    [t(locale, "الاستحقاق الأصلي", "Original due date"), formatDateLabel(payment.dueDate, locale)],
+    [t(locale, "الاستحقاق الفعلي", "Effective due date"), formatDateLabel(effectiveDueDate, locale)],
+    [t(locale, "بداية الباقة", "Block start"), formatDateLabel(payment.blockStartDate, locale)],
+    [t(locale, "نهاية الباقة", "Block end"), formatDateLabel(payment.blockEndDate, locale)],
+    [t(locale, "التأجيل حتى", "Deferred until"), formatDateLabel(payment.deferredUntil, locale)],
+    [t(locale, "ملاحظات الاتفاق", "Agreement notes"), note],
   ] as const;
 
   return (
-    <div className="min-h-screen bg-slate-50 px-4 py-8 print:bg-white">
+    <div className="min-h-screen bg-slate-50 px-4 py-8 print:bg-white" dir={isAr ? "rtl" : "ltr"}>
       <div className="mx-auto flex max-w-5xl flex-col gap-6">
-        <div className="flex items-center justify-between print:hidden">
+        <div className="flex items-center justify-between gap-3 print:hidden">
           <Link
             href={`/payments/${paymentId}`}
             className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
           >
-            العودة إلى الدفعة
+            {t(locale, "العودة إلى الدفعة", "Back to payment")}
           </Link>
-          <InvoiceToolbar whatsappUrl={whatsappUrl} mailtoUrl={mailtoUrl} />
+          <InvoiceToolbar whatsappUrl={shareTargets.whatsappUrl} mailtoUrl={shareTargets.mailtoUrl} />
         </div>
 
         <div className="overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-sm">
@@ -143,11 +193,11 @@ Skidy Rein`,
             <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
               <div className="space-y-2">
                 <p className="text-sm text-white/80">Skidy Rein</p>
-                <h1 className="text-3xl font-bold">فاتورة تحصيل — Skidy Rein</h1>
-                <p className="text-sm text-white/85">Skidy Rein • أكاديمية برمجة للأطفال • مستند مالي جاهز للطباعة والإرسال</p>
+                <h1 className="text-3xl font-bold">{t(locale, "فاتورة تحصيل — Skidy Rein", "Collection invoice — Skidy Rein")}</h1>
+                <p className="text-sm text-white/85">{t(locale, "أكاديمية برمجة للأطفال • مستند مالي جاهز للطباعة والحفظ كـ PDF", "Kids coding academy • print-ready financial document")}</p>
               </div>
               <div className="rounded-2xl bg-white/10 px-5 py-4 text-sm backdrop-blur">
-                <p className="text-white/75">رقم الفاتورة</p>
+                <p className="text-white/75">{t(locale, "رقم الفاتورة", "Invoice number")}</p>
                 <p className="mt-1 text-lg font-semibold">{invoiceNumber}</p>
               </div>
             </div>
@@ -156,7 +206,7 @@ Skidy Rein`,
           <div className="grid gap-6 px-8 py-8 lg:grid-cols-[1.4fr_0.8fr]">
             <div className="space-y-6">
               <div className="rounded-3xl border border-slate-200 p-5">
-                <h2 className="mb-4 text-xl font-semibold text-slate-900">تفاصيل الفاتورة</h2>
+                <h2 className="mb-4 text-xl font-semibold text-slate-900">{t(locale, "تفاصيل الفاتورة", "Invoice details")}</h2>
                 <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
                   {rows.map(([label, value]) => (
                     <div key={label} className="border-b border-dashed border-slate-200 pb-3 last:border-b-0 last:pb-0">
@@ -168,18 +218,18 @@ Skidy Rein`,
               </div>
 
               <div className="rounded-3xl border border-slate-200 p-5">
-                <h2 className="mb-4 text-xl font-semibold text-slate-900">بيانات التواصل</h2>
+                <h2 className="mb-4 text-xl font-semibold text-slate-900">{t(locale, "بيانات التواصل", "Contact details")}</h2>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <p className="text-sm text-slate-500">ولي الأمر</p>
+                    <p className="text-sm text-slate-500">{t(locale, "ولي الأمر", "Parent")}</p>
                     <p className="mt-1 font-medium text-slate-900">{parentName}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-slate-500">الهاتف</p>
+                    <p className="text-sm text-slate-500">{t(locale, "الهاتف", "Phone")}</p>
                     <p className="mt-1 font-medium text-slate-900">{parentPhone || "—"}</p>
                   </div>
                   <div className="sm:col-span-2">
-                    <p className="text-sm text-slate-500">البريد</p>
+                    <p className="text-sm text-slate-500">{t(locale, "البريد", "Email")}</p>
                     <p className="mt-1 font-medium text-slate-900">{parentEmail || "—"}</p>
                   </div>
                 </div>
@@ -188,22 +238,25 @@ Skidy Rein`,
 
             <div className="space-y-6">
               <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5">
-                <p className="text-sm text-emerald-700">إجمالي المستحق</p>
-                <p className="mt-2 text-3xl font-bold text-emerald-900">{formatCurrencyEgp(amount)}</p>
-                <p className="mt-2 text-sm text-emerald-800">الفاتورة الحالية مبنية على باقة من {sessionsCount} جلسات، وليس على اشتراك شهري ثابت.</p>
+                <p className="text-sm text-emerald-700">{t(locale, "إجمالي المستحق", "Total amount due")}</p>
+                <p className="mt-2 text-3xl font-bold text-emerald-900">{formatCurrency(payment.amount, locale)}</p>
+                <p className="mt-2 text-sm text-emerald-800">{getBillingCycleText(payment, locale)}</p>
               </div>
 
               <div className="rounded-3xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
-                <p className="font-semibold">ملاحظة تشغيلية</p>
+                <p className="font-semibold">{t(locale, "ملاحظة تشغيلية", "Operational note")}</p>
                 <p className="mt-2 leading-7">
-                  يمكن أن تنتهي الباقة خلال شهر واحد أو أكثر من شهر حسب انتظام حضور الجلسات، ويمكن أيضًا تأجيل الدفع بالاتفاق مع ولي الأمر.
+                  {t(
+                    locale,
+                    "هذه الفاتورة مرتبطة بباقة جلسات وليست باشتراك شهري ثابت. لذلك قد تنتهي الأربع جلسات خلال شهر واحد أو أكثر من شهر، كما يمكن تأجيل الاستحقاق بالاتفاق مع ولي الأمر.",
+                    "This invoice is tied to a session block, not a fixed monthly subscription. The four sessions may finish within one month or over several months, and the due date can be deferred by agreement with the parent.",
+                  )}
                 </p>
               </div>
 
               <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-700">
                 <p className="font-semibold text-slate-900">Skidy Rein</p>
-                <p className="mt-2 leading-7">للتواصل المالي: 01000000000 — billing@skidyrein.com</p>
-                <p className="mt-1 leading-7">هذه الفاتورة صالحة للحفظ كملف PDF أو مشاركتها مباشرة مع ولي الأمر.</p>
+                <p className="mt-2 leading-7">{t(locale, "يمكن حفظ هذه الصفحة مباشرة كملف PDF من نافذة الطباعة أو مشاركتها مع ولي الأمر عبر واتساب أو البريد.", "This page can be saved directly as a PDF from the print dialog or shared with the parent via WhatsApp or email.")}</p>
               </div>
             </div>
           </div>

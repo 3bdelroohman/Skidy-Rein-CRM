@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { MessageCircle, Search, Users } from "lucide-react";
+import { MessageCircle, Plus, Search, Users } from "lucide-react";
 import { useUIStore } from "@/stores/ui-store";
 import { t } from "@/lib/locale";
 import { cn } from "@/lib/utils";
 import { listParentsWithRelations } from "@/services/relations.service";
+import { syncWonLeadsToEnrollments } from "@/services/enrollment.service";
 import type { ParentListItem } from "@/types/crm";
 import { EmptySearchState, LoadingState } from "@/components/shared/page-state";
 
@@ -21,10 +22,14 @@ export default function ParentsPage() {
     let isMounted = true;
     async function load() {
       setLoading(true);
-      const data = await listParentsWithRelations();
-      if (isMounted) {
-        setParents(data);
-        setLoading(false);
+      try {
+        await syncWonLeadsToEnrollments();
+        const data = await listParentsWithRelations();
+        if (isMounted) {
+          setParents(data);
+        }
+      } finally {
+        if (isMounted) setLoading(false);
       }
     }
     load();
@@ -47,12 +52,19 @@ export default function ParentsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
-          <Users size={28} className="text-brand-600" />
-          {t(locale, "أولياء الأمور", "Parents")}
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">{t(locale, "متابعة بيانات التواصل وربط أولياء الأمور بالأطفال والعملاء المحتملين", "Track contact details and link parents with students and open leads")}</p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
+            <Users size={28} className="text-brand-600" />
+            {t(locale, "أولياء الأمور", "Parents")}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">{t(locale, "متابعة بيانات التواصل وربط أولياء الأمور بالأطفال والعملاء المحتملين", "Track contact details and link parents with students and open leads")}</p>
+        </div>
+
+        <Link href="/parents/new" className="inline-flex items-center gap-2 rounded-xl bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600">
+          <Plus size={18} />
+          {t(locale, "إضافة ولي أمر", "Add parent")}
+        </Link>
       </div>
 
       <div className="relative max-w-md">

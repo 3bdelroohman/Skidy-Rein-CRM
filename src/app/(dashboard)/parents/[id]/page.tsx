@@ -59,14 +59,23 @@ export default function ParentDetailsPage({ params }: { params: Promise<{ id: st
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Link href="/parents" className="rounded-xl p-2 text-muted-foreground transition-colors hover:bg-muted">
-          {isAr ? <ArrowRight size={18} /> : <ArrowLeft size={18} />}
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">{parent.fullName}</h1>
-          <p className="text-sm text-muted-foreground">{parent.phone}</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <Link href="/parents" className="rounded-xl p-2 text-muted-foreground transition-colors hover:bg-muted">
+            {isAr ? <ArrowRight size={18} /> : <ArrowLeft size={18} />}
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">{parent.fullName}</h1>
+            <p className="text-sm text-muted-foreground">{parent.phone}</p>
+          </div>
         </div>
+
+        <Link
+          href={`/students/new?parentName=${encodeURIComponent(parent.fullName)}&parentPhone=${encodeURIComponent(parent.phone)}`}
+          className="inline-flex items-center gap-2 rounded-xl bg-brand-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
+        >
+          {t(locale, "إضافة طالب لهذا ولي الأمر", "Add student for this parent")}
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -95,7 +104,15 @@ export default function ParentDetailsPage({ params }: { params: Promise<{ id: st
         <div className="rounded-2xl border border-border bg-card p-5">
           <h3 className="mb-4 font-bold text-foreground">{t(locale, "الأطفال المرتبطون", "Linked children")}</h3>
           {parent.childrenRecords.length === 0 ? (
-            <EmptyCopy locale={locale} ar="لا توجد ملفات طلاب مرتبطة بهذا الرقم أو الاسم حتى الآن" en="No student profiles are linked to this parent yet" />
+            <div className="space-y-3">
+              <EmptyCopy locale={locale} ar="لا توجد ملفات طلاب مرتبطة بهذا الرقم أو الاسم حتى الآن" en="No student profiles are linked to this parent yet" />
+              <Link
+                href={`/students/new?parentName=${encodeURIComponent(parent.fullName)}&parentPhone=${encodeURIComponent(parent.phone)}`}
+                className="inline-flex items-center rounded-xl border border-border px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
+              >
+                {t(locale, "إنشاء طالب الآن", "Create student now")}
+              </Link>
+            </div>
           ) : (
             <div className="space-y-3">
               {parent.childrenRecords.map((student) => (

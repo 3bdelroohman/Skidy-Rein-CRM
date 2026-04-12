@@ -346,6 +346,30 @@ export interface ActionCenterData {
   notifications: AppNotificationItem[];
 }
 
+
+export interface CreateParentInput {
+  fullName: string;
+  phone: string;
+  whatsapp?: string;
+  email?: string;
+  city?: string;
+  childrenCount?: number;
+}
+
+export interface CreateStudentInput {
+  fullName: string;
+  age: number;
+  parentId?: string | null;
+  parentName: string;
+  parentPhone: string;
+  status?: StudentStatus;
+  currentCourse?: CourseType | null;
+  className?: string | null;
+  enrollmentDate?: string | null;
+  sessionsAttended?: number;
+  totalPaid?: number;
+}
+
 export interface CreateLeadInput {
   childName: string;
   childAge: number;
