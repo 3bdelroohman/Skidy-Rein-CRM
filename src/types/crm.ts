@@ -374,6 +374,26 @@ export interface CreateStudentInput {
   totalPaid?: number;
 }
 
+
+
+export interface CreateTeacherInput {
+  fullName: string;
+  phone: string;
+  email: string;
+  employment: EmploymentType;
+  specialization: CourseType[];
+  isActive?: boolean;
+}
+
+export interface CreateScheduleEntryInput {
+  className: string;
+  teacherId: string;
+  course: CourseType;
+  day: number;
+  startTime: string;
+  endTime: string;
+}
+
 export interface CreateLeadInput {
   childName: string;
   childAge: number;

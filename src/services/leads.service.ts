@@ -139,7 +139,10 @@ function mapLeadRow(row: Database["public"]["Tables"]["leads"]["Row"] | Record<s
     source: asString(record.source, "other") as LeadListItem["source"],
     suggestedCourse: asNullableString(record.suggested_course ?? record.suggestedCourse) as LeadListItem["suggestedCourse"],
     assignedTo: asString(record.assigned_to ?? record.assignedTo, ""),
-    assignedToName: asString(record.assigned_to_name ?? record.assignedToName, "غير مخصص"),
+    assignedToName: asString(
+      record.assigned_to_name ?? record.assignedToName,
+      MOCK_TEAM.find((member) => member.id === asString(record.assigned_to ?? record.assignedTo))?.name ?? "غير مخصص",
+    ),
     lastContactAt: asNullableString(record.last_contact_at ?? record.lastContactAt),
     nextFollowUpAt: asNullableString(record.next_follow_up_at ?? record.nextFollowUpAt),
     notes: asNullableString(record.notes),
@@ -162,6 +165,40 @@ function mapActivityRow(row: Database["public"]["Tables"]["lead_activities"]["Ro
   };
 }
 
+
+async function enrichAssignedToNames(items: LeadListItem[]): Promise<LeadListItem[]> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return items;
+
+  const missingIds = Array.from(new Set(
+    items
+      .filter((lead) => isUuid(lead.assignedTo) && (!lead.assignedToName || lead.assignedToName === "غير مخصص"))
+      .map((lead) => lead.assignedTo),
+  ));
+
+  if (missingIds.length === 0) return items;
+
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, full_name, full_name_ar")
+      .in("id", missingIds);
+
+    if (error || !data) return items;
+
+    const profileMap = new Map(
+      data.map((row) => [row.id, asString(row.full_name_ar ?? row.full_name, "غير مخصص")]),
+    );
+
+    return items.map((lead) => ({
+      ...lead,
+      assignedToName: profileMap.get(lead.assignedTo) ?? lead.assignedToName,
+    }));
+  } catch {
+    return items;
+  }
+}
+
 async function syncLeadsFromSupabase(): Promise<LeadListItem[] | null> {
   const supabase = getSupabaseClient();
   if (!supabase) return null;
@@ -178,7 +215,7 @@ async function syncLeadsFromSupabase(): Promise<LeadListItem[] | null> {
     return [];
   }
 
-  const mapped = data.map((row: Database["public"]["Tables"]["leads"]["Row"]) => mapLeadRow(row));
+  const mapped = await enrichAssignedToNames(data.map((row: Database["public"]["Tables"]["leads"]["Row"]) => mapLeadRow(row)));
   saveLocalLeads(mapped);
   return mapped;
 }
@@ -232,7 +269,7 @@ export async function getLeadById(id: string): Promise<LeadListItem | null> {
   try {
     const { data, error } = await supabase.from("leads").select("*").eq("id", id).maybeSingle();
     if (error || !data) return null;
-    const mapped = mapLeadRow(data);
+    const [mapped] = await enrichAssignedToNames([mapLeadRow(data)]);
     const next = [mapped, ...getLocalLeads().filter((lead) => lead.id !== id)];
     saveLocalLeads(next);
     return mapped;
@@ -302,6 +339,7 @@ export async function createLead(input: CreateLeadInput): Promise<LeadListItem> 
       price_range_shared: false,
       whatsapp_collected: Boolean((input.parentWhatsapp ?? input.parentPhone).trim()),
       assigned_to: assignedToUuid,
+      assigned_to_name: draftLead.assignedToName,
       notes: draftLead.notes,
       created_at: draftLead.createdAt,
     };
@@ -402,6 +440,7 @@ export async function updateLead(
         source: updated.source as Database["public"]["Enums"]["lead_source"],
         suggested_course: updated.suggestedCourse as Database["public"]["Enums"]["course_type"] | null,
         assigned_to: assignedToUuid,
+        assigned_to_name: updated.assignedToName,
         notes: updated.notes,
         loss_reason: updated.lossReason,
         next_follow_up_at: updated.nextFollowUpAt,
@@ -505,7 +544,7 @@ export async function updateLeadStage(
       saveLocalActivities([activity, ...getLocalActivities().filter((item) => item.id !== activity.id)]);
     }
 
-    const synced = mapLeadRow(data);
+    const synced = { ...mapLeadRow(data), assignedToName: existing.assignedToName };
     saveLocalLeads([synced, ...getLocalLeads().filter((lead) => lead.id !== leadId)]);
     return synced;
   } catch (error) {

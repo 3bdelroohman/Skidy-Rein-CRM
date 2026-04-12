@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight, CalendarDays, Clock, Search, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarDays, CalendarPlus, Clock, Search, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { listScheduleSessions, getScheduleOverview } from "@/services/schedule.service";
 import { useUIStore } from "@/stores/ui-store";
@@ -73,14 +73,21 @@ export default function SchedulePage() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-3xl border border-border bg-card p-6">
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
-          <CalendarDays size={28} className="text-brand-600" />
-          {t(locale, "الجدول", "Schedule")}
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {t(locale, "عرض أسبوعي للكلاسات، الأحمال، وأهم الجلسات الجارية", "Weekly view of classes, load, and ongoing sessions")}
-        </p>
+      <div className="flex flex-col gap-4 rounded-3xl border border-border bg-card p-6 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
+            <CalendarDays size={28} className="text-brand-600" />
+            {t(locale, "الجدول", "Schedule")}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t(locale, "عرض أسبوعي للكلاسات، الأحمال، وأهم الجلسات الجارية", "Weekly view of classes, load, and ongoing sessions")}
+          </p>
+        </div>
+
+        <Link href="/schedule/new" className="inline-flex items-center gap-2 rounded-xl bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600">
+          <CalendarPlus size={18} />
+          {t(locale, "إضافة حصة / حدث", "Add session / event")}
+        </Link>
       </div>
 
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">

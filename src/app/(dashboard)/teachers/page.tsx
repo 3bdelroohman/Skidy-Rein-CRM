@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, Mail, Phone, Search } from "lucide-react";
+import { BookOpen, Mail, Phone, Plus, Search } from "lucide-react";
 import { useUIStore } from "@/stores/ui-store";
 import { COURSE_TYPE_LABELS, COURSE_TYPE_EN_LABELS } from "@/config/labels";
 import { getEmploymentTypeLabel, t } from "@/lib/locale";
@@ -47,12 +47,19 @@ export default function TeachersPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
-          <BookOpen size={28} className="text-brand-600" />
-          {t(locale, "المدرسين", "Teachers")}
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">{t(locale, "إدارة فريق المدرسين وربطهم بالكلاسات والطلاب الفعليين", "Manage teachers and link them with actual classes and students")}</p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
+            <BookOpen size={28} className="text-brand-600" />
+            {t(locale, "المدرسين", "Teachers")}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">{t(locale, "إدارة فريق المدرسين وربطهم بالكلاسات والطلاب الفعليين", "Manage teachers and link them with actual classes and students")}</p>
+        </div>
+
+        <Link href="/teachers/new" className="inline-flex items-center gap-2 rounded-xl bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600">
+          <Plus size={18} />
+          {t(locale, "إضافة مدرس", "Add teacher")}
+        </Link>
       </div>
 
       <div className="relative max-w-md">
