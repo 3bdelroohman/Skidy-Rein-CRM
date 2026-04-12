@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { getCourseFamilyFromTrack, getCourseTrackLabel, getCourseTrackOptions, suggestCourseByAge } from "@/config/course-roadmap";
 import { STUDENT_STATUS_META, getMetaLabel } from "@/config/status-meta";
 import { t } from "@/lib/locale";
+import { guardStudentDuplicate } from "@/services/duplicate-guard.service";
 import { useUIStore } from "@/stores/ui-store";
 import type { CourseType, StudentStatus } from "@/types/common.types";
 import type { CreateStudentInput } from "@/types/crm";
@@ -92,6 +93,17 @@ export function StudentForm({
     const age = parseInt(form.age, 10);
     if (Number.isNaN(age) || age < 4 || age > 18) {
       toast.error(t(locale, "العمر يجب أن يكون بين 4 و 18 سنة", "Age must be between 4 and 18"));
+      return;
+    }
+
+    const duplicate = await guardStudentDuplicate({
+      fullName: form.fullName.trim(),
+      parentName: form.parentName.trim(),
+      parentPhone: form.parentPhone.trim(),
+    });
+
+    if (duplicate?.blocking) {
+      toast.error(t(locale, duplicate.messageAr, duplicate.messageEn));
       return;
     }
 

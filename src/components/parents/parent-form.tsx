@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Save, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { t } from "@/lib/locale";
+import { guardParentDuplicate } from "@/services/duplicate-guard.service";
 import { useUIStore } from "@/stores/ui-store";
 import { getCourseFamilyFromTrack, getCourseTrackLabel, getCourseTrackOptions, suggestCourseByAge } from "@/config/course-roadmap";
 import type { CreateParentInput } from "@/types/crm";
@@ -68,6 +69,17 @@ export function ParentForm({
 
     if (form.firstStudentName.trim() && !form.firstStudentAge.trim()) {
       toast.error(t(locale, "إذا أدخلت اسم الطالب الأول يجب إدخال العمر أيضًا", "If you enter a first student name, age is also required"));
+      return;
+    }
+
+    const duplicate = await guardParentDuplicate({
+      fullName: form.fullName.trim(),
+      phone: form.phone.trim(),
+      whatsapp: form.whatsapp.trim() || undefined,
+    });
+
+    if (duplicate?.blocking) {
+      toast.error(t(locale, duplicate.messageAr, duplicate.messageEn));
       return;
     }
 

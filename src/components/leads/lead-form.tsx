@@ -22,6 +22,7 @@ import {
 import { getCourseFamilyFromTrack, getCourseTrackLabel, getCourseTrackOptions, suggestCourseByAge } from "@/config/course-roadmap";
 import { MOCK_TEAM } from "@/lib/mock-data";
 import { t } from "@/lib/locale";
+import { guardLeadDuplicate } from "@/services/duplicate-guard.service";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui-store";
 import type { CreateLeadInput } from "@/types/crm";
@@ -146,6 +147,18 @@ export function LeadForm({
     const age = parseInt(form.childAge, 10);
     if (Number.isNaN(age) || age < 4 || age > 18) {
       toast.error(t(locale, "العمر يجب أن يكون بين 4 و 18 سنة", "Age must be between 4 and 18"));
+      return;
+    }
+
+    const duplicate = await guardLeadDuplicate({
+      childName: form.childName.trim(),
+      parentName: form.parentName.trim(),
+      parentPhone: form.parentPhone.trim(),
+      parentWhatsapp: form.parentWhatsapp.trim() || undefined,
+    });
+
+    if (duplicate?.blocking) {
+      toast.error(t(locale, duplicate.messageAr, duplicate.messageEn));
       return;
     }
 

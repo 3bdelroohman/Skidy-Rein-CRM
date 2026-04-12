@@ -90,7 +90,7 @@ export default function SchedulePage() {
         </Link>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <MiniMetric label={t(locale, "عدد الجلسات", "Sessions")} value={overview.sessionsCount} />
         <MiniMetric label={t(locale, "إجمالي المقاعد", "Total seats")} value={overview.totalStudents} />
         <MiniMetric label={t(locale, "عدد المدرسين", "Teachers")} value={overview.uniqueTeachers} />
@@ -130,10 +130,10 @@ export default function SchedulePage() {
         </div>
       ) : (
         <>
-          <div className="hidden gap-3 xl:grid xl:grid-cols-7">
+          <div className="hidden gap-2 lg:grid lg:grid-cols-7 xl:gap-3">
             {grouped.map(({ day, items }) => (
-              <div key={day} className="rounded-2xl border border-border bg-card p-2.5">
-                <div className="mb-2 border-b border-border pb-2 text-center text-sm font-bold text-foreground">{day}</div>
+              <div key={day} className="min-w-0 rounded-2xl border border-border bg-card p-2">
+                <div className="mb-2 truncate border-b border-border pb-2 text-center text-xs font-bold text-foreground xl:text-sm">{day}</div>
                 <div className="space-y-2">
                   {items.length === 0 ? (
                     <EmptyDay label={t(locale, "لا توجد جلسات", "No sessions")} />
@@ -141,17 +141,17 @@ export default function SchedulePage() {
                     items.map((session) => {
                       const colors = COURSE_COLORS[session.course];
                       return (
-                        <Link key={session.id} href={`/schedule/${session.id}`} className={cn("block rounded-xl border p-2.5 transition-all hover:-translate-y-0.5 hover:shadow-sm", colors.bg, colors.border)}>
+                        <Link key={session.id} href={`/schedule/${session.id}`} className={cn("block min-w-0 rounded-xl border p-2 transition-all hover:-translate-y-0.5 hover:shadow-sm", colors.bg, colors.border)}>
                           <div className="flex items-start justify-between gap-2">
                             <div>
-                              <p className={cn("text-[13px] font-bold leading-5", colors.text)}>{session.className}</p>
-                              <p className="mt-1 text-[10px] text-muted-foreground">{getCourseLabel(session.course, locale)}</p>
+                              <p className={cn("truncate text-[12px] font-bold leading-4 xl:text-[13px]", colors.text)}>{session.className}</p>
+                              <p className="mt-1 truncate text-[9px] text-muted-foreground xl:text-[10px]">{getCourseLabel(session.course, locale)}</p>
                             </div>
-                            <span className="rounded-lg bg-white/70 px-1.5 py-1 text-[10px] text-muted-foreground dark:bg-black/20">{session.startTime}</span>
+                            <span className="shrink-0 rounded-lg bg-white/70 px-1.5 py-1 text-[9px] text-muted-foreground dark:bg-black/20 xl:text-[10px]">{session.startTime}</span>
                           </div>
-                          <div className="mt-2 space-y-1 text-[10px] text-muted-foreground">
+                          <div className="mt-2 space-y-1 text-[9px] text-muted-foreground xl:text-[10px]">
                             <div className="flex items-center gap-1.5"><Clock size={12} />{session.startTime} — {session.endTime}</div>
-                            <div className="flex items-center gap-1.5"><Users size={12} />{session.teacher} • {session.students} {t(locale, "طلاب", "students")}</div>
+                            <div className="flex items-center gap-1.5"><Users size={12} /><span className="truncate">{session.teacher}</span><span className="shrink-0">• {session.students} {t(locale, "طلاب", "students")}</span></div>
                           </div>
                         </Link>
                       );
