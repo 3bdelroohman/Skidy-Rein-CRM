@@ -6,9 +6,8 @@ import { ArrowLeft, ArrowRight, Save, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { t } from "@/lib/locale";
 import { useUIStore } from "@/stores/ui-store";
-import { COURSE_ROADMAP_OPTIONS, getCourseTracks, suggestCourseByAge } from "@/config/course-roadmap";
+import { getCourseFamilyFromTrack, getCourseTrackLabel, getCourseTrackOptions, suggestCourseByAge } from "@/config/course-roadmap";
 import type { CreateParentInput } from "@/types/crm";
-import type { CourseType } from "@/types/common.types";
 
 interface ParentFormProps {
   title: string;
@@ -39,22 +38,20 @@ export function ParentForm({
     city: "",
     firstStudentName: "",
     firstStudentAge: "",
-    firstStudentCourse: "",
+    firstStudentTrackId: "",
     firstStudentClassName: "",
   });
 
-  const courseOptions = useMemo(
-    () => COURSE_ROADMAP_OPTIONS.map((option) => ({ value: option.value, label: locale === "ar" ? option.formLabelAr : option.formLabelEn })),
-    [locale],
-  );
+  const trackOptions = useMemo(() => getCourseTrackOptions(locale), [locale]);
 
   const updateField = (field: keyof typeof form, value: string) => {
     setForm((prev) => {
       const next = { ...prev, [field]: value };
       if (field === "firstStudentAge") {
         const age = Number(value);
-        if (Number.isFinite(age) && age >= 4 && !next.firstStudentCourse) {
-          next.firstStudentCourse = suggestCourseByAge(age);
+        if (Number.isFinite(age) && age >= 4 && !next.firstStudentTrackId) {
+          const family = suggestCourseByAge(age);
+          next.firstStudentTrackId = trackOptions.find((item) => item.family === family)?.value ?? "";
         }
       }
       return next;
@@ -84,7 +81,7 @@ export function ParentForm({
         city: form.city.trim() || undefined,
         firstStudentName: form.firstStudentName.trim() || undefined,
         firstStudentAge: form.firstStudentAge.trim() ? Number(form.firstStudentAge) : undefined,
-        firstStudentCourse: form.firstStudentCourse ? (form.firstStudentCourse as CourseType) : undefined,
+        firstStudentCourse: getCourseFamilyFromTrack(form.firstStudentTrackId),
         firstStudentClassName: form.firstStudentClassName.trim() || undefined,
       });
       toast.success(successMessage);
@@ -136,8 +133,8 @@ export function ParentForm({
             <FormField label={t(locale, "اسم الطالب", "Student name")} value={form.firstStudentName} onChange={(value) => updateField("firstStudentName", value)} placeholder={t(locale, "مثال: يوسف", "Example: Youssef")} />
             <FormField label={t(locale, "العمر", "Age")} value={form.firstStudentAge} onChange={(value) => updateField("firstStudentAge", value)} placeholder="10" type="number" min={4} max={18} />
             <div className="sm:col-span-2">
-              <FormSelect label={t(locale, "المسار المقترح", "Suggested track")} value={form.firstStudentCourse} onChange={(value) => updateField("firstStudentCourse", value)} options={courseOptions} placeholder={t(locale, "يتحدد تلقائيًا حسب العمر", "Auto-selected based on age")} />
-              {form.firstStudentCourse ? <p className="mt-2 text-xs leading-5 text-muted-foreground">{getCourseTracks(form.firstStudentCourse as CourseType, locale).join(" • ")}</p> : null}
+              <FormSelect label={t(locale, "الكورس / المسار", "Course / track")} value={form.firstStudentTrackId} onChange={(value) => updateField("firstStudentTrackId", value)} options={trackOptions.map((item) => ({ value: item.value, label: item.label }))} placeholder={t(locale, "اختر الكورس الأنسب", "Choose the most suitable course")} />
+              {form.firstStudentTrackId ? <p className="mt-2 text-xs leading-5 text-muted-foreground">{getCourseTrackLabel(form.firstStudentTrackId, locale)}</p> : null}
             </div>
             <div className="sm:col-span-2">
               <FormField label={t(locale, "اسم الكلاس", "Class name")} value={form.firstStudentClassName} onChange={(value) => updateField("firstStudentClassName", value)} placeholder={t(locale, "اختياري", "Optional")} />

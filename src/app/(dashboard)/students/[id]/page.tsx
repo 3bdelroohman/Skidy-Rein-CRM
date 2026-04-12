@@ -9,6 +9,7 @@ import { getCourseFormLabel, getCourseTracks } from "@/config/course-roadmap";
 import { t } from "@/lib/locale";
 import { formatCurrencyEgp, formatDate } from "@/lib/formatters";
 import { getStudentDetails } from "@/services/relations.service";
+import { buildStudentJourney } from "@/services/student-journey.service";
 import { LoadingState, PageStateCard } from "@/components/shared/page-state";
 import type { StudentDetails } from "@/types/crm";
 
@@ -60,6 +61,8 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
 
   const status = STUDENT_STATUS_META[student.status];
   const courseTracks = student.currentCourse ? getCourseTracks(student.currentCourse, locale) : [];
+  const journey = buildStudentJourney(student);
+  const primaryTeacher = student.teachers[0] ?? null;
 
   return (
     <div className="space-y-6">
@@ -87,6 +90,7 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
             <Info label={t(locale, "الكلاس", "Class")} value={student.className ?? t(locale, "غير مسجل", "Not assigned")} />
             <Info label={t(locale, "تاريخ الالتحاق", "Enrollment date")} value={formatDate(student.enrollmentDate, locale)} />
             <Info label={t(locale, "عدد الحصص", "Sessions attended")} value={student.sessionsAttended.toString()} />
+            <Info label={t(locale, "المسؤول", "Owner")} value={student.ownerName ?? t(locale, "غير مخصص", "Unassigned")} />
             <Info label={t(locale, "إجمالي المدفوع", "Total paid")} value={formatCurrencyEgp(student.totalPaid, locale)} />
           </div>
           {courseTracks.length > 0 ? (
@@ -140,6 +144,44 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
               )}
             </div>
           </div>
+        </div>
+      </div>
+
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <div className="rounded-2xl border border-border bg-card p-5 xl:col-span-2">
+          <h3 className="mb-4 font-bold text-foreground">{t(locale, "رحلة الطالب", "Student journey")}</h3>
+          <div className="mb-4 rounded-2xl bg-brand-50 p-4 dark:bg-brand-950/40">
+            <p className="text-xs text-muted-foreground">{t(locale, "المرحلة الحالية", "Current stage")}</p>
+            <p className="mt-1 text-base font-bold text-foreground">{locale === "ar" ? journey.stageAr : journey.stageEn}</p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {journey.reportReady ? t(locale, "يمكن لاحقًا استخراج تقرير ولي الأمر من هذه الرحلة.", "Parent reporting can later be generated from this journey.") : t(locale, "سيصبح التقرير الشهري منطقيًا بعد إكمال 4 حصص على الأقل.", "The monthly report becomes meaningful after at least 4 sessions.")}
+            </p>
+          </div>
+          <div className="space-y-3">
+            {journey.milestones.map((item) => (
+              <div key={item.id} className="rounded-2xl border border-border bg-background p-4">
+                <p className="text-sm font-semibold text-foreground">{locale === "ar" ? item.titleAr : item.titleEn}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{locale === "ar" ? item.detailAr : item.detailEn}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-border bg-card p-5">
+          <h3 className="mb-3 flex items-center gap-2 font-bold text-foreground"><MessageCircle size={18} className="text-brand-600" />{t(locale, "المدرس الحالي", "Current teacher")}</h3>
+          {primaryTeacher ? (
+            <div className="space-y-3">
+              <Info label={t(locale, "الاسم", "Name")} value={primaryTeacher.fullName} />
+              <Info label={t(locale, "الهاتف", "Phone")} value={primaryTeacher.phone} />
+              <Info label={t(locale, "التخصص", "Specialization")} value={primaryTeacher.specialization.map((item) => getCourseFormLabel(item, locale)).join(" • ")} />
+              <Link href={`/teachers/${primaryTeacher.id}`} className="inline-flex rounded-xl bg-brand-600 px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90">
+                {t(locale, "فتح ملف المدرس", "Open teacher profile")}
+              </Link>
+            </div>
+          ) : (
+            <EmptyCopy locale={locale} ar="لم يتم ربط مدرس أساسي بهذا الطالب بعد" en="No primary teacher has been linked to this student yet" />
+          )}
         </div>
       </div>
 

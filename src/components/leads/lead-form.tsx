@@ -19,13 +19,13 @@ import {
   TEMPERATURE_EN_LABELS,
   TEMPERATURE_LABELS,
 } from "@/config/labels";
-import { COURSE_ROADMAP_OPTIONS, getCourseTracks, suggestCourseByAge } from "@/config/course-roadmap";
+import { getCourseFamilyFromTrack, getCourseTrackLabel, getCourseTrackOptions, suggestCourseByAge } from "@/config/course-roadmap";
 import { MOCK_TEAM } from "@/lib/mock-data";
 import { t } from "@/lib/locale";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui-store";
 import type { CreateLeadInput } from "@/types/crm";
-import type { CourseType, LeadSource, LeadTemperature } from "@/types/common.types";
+import type { LeadSource, LeadTemperature } from "@/types/common.types";
 
 export interface LeadFormValues {
   childName: string;
@@ -35,7 +35,7 @@ export interface LeadFormValues {
   parentWhatsapp: string;
   source: LeadSource;
   temperature: LeadTemperature;
-  suggestedCourse: CourseType | "";
+  selectedTrackId: string;
   assignedTo: string;
   hasLaptop: boolean;
   hasPriorExperience: boolean;
@@ -61,7 +61,7 @@ const DEFAULT_VALUES: LeadFormValues = {
   parentWhatsapp: "",
   source: "facebook_ad",
   temperature: "warm",
-  suggestedCourse: "",
+  selectedTrackId: "",
   assignedTo: MOCK_TEAM[0]?.id ?? "",
   hasLaptop: false,
   hasPriorExperience: false,
@@ -100,13 +100,7 @@ export function LeadForm({
     [isAr],
   );
 
-  const courseOptions = useMemo(
-    () => COURSE_ROADMAP_OPTIONS.map((option) => ({
-      value: option.value,
-      label: isAr ? option.formLabelAr : option.formLabelEn,
-    })),
-    [isAr],
-  );
+  const courseOptions = useMemo(() => getCourseTrackOptions(locale).map((option) => ({ value: option.value, label: option.label, family: option.family })), [locale]);
 
   const temperatureOptions = useMemo(
     () => Object.entries(isAr ? TEMPERATURE_LABELS : TEMPERATURE_EN_LABELS).map(([value, label]) => ({ value: value as LeadTemperature, label })),
@@ -121,14 +115,20 @@ export function LeadForm({
       if (field === "childAge") {
         const age = parseInt(value as string, 10);
         if (!Number.isNaN(age)) {
-          next.suggestedCourse = suggestCourseByAge(age, next.hasPriorExperience);
+          if (!next.selectedTrackId) {
+            const family = suggestCourseByAge(age, next.hasPriorExperience);
+            next.selectedTrackId = courseOptions.find((option) => option.family === family)?.value ?? "";
+          }
         }
       }
 
       if (field === "hasPriorExperience") {
         const age = parseInt(next.childAge, 10);
         if (!Number.isNaN(age)) {
-          next.suggestedCourse = suggestCourseByAge(age, Boolean(value));
+          if (!next.selectedTrackId) {
+            const family = suggestCourseByAge(age, Boolean(value));
+            next.selectedTrackId = courseOptions.find((option) => option.family === family)?.value ?? "";
+          }
         }
       }
       return next;
@@ -161,7 +161,7 @@ export function LeadForm({
         parentWhatsapp: form.parentWhatsapp || undefined,
         source: form.source,
         temperature: form.temperature,
-        suggestedCourse: form.suggestedCourse || null,
+        suggestedCourse: getCourseFamilyFromTrack(form.selectedTrackId),
         assignedTo: form.assignedTo,
         assignedToName,
         hasLaptop: form.hasLaptop,
@@ -207,10 +207,10 @@ export function LeadForm({
             <FormField label={t(locale, "اسم الطفل *", "Child name *")} value={form.childName} onChange={(value) => updateField("childName", value)} placeholder={t(locale, "مثال: يوسف", "Example: Youssef")} />
             <FormField label={t(locale, "العمر *", "Age *")} type="number" value={form.childAge} onChange={(value) => updateField("childAge", value)} placeholder="10" min={4} max={18} />
             <div className="space-y-2">
-              <FormSelect label={t(locale, "الكورس المقترح", "Suggested course")} value={form.suggestedCourse} onChange={(value) => updateField("suggestedCourse", value)} options={courseOptions} placeholder={t(locale, "يتحدد تلقائياً حسب العمر", "Auto-selected based on age")} />
-              {form.suggestedCourse ? (
+              <FormSelect label={t(locale, "الكورس / المسار", "Course / track")} value={form.selectedTrackId} onChange={(value) => updateField("selectedTrackId", value)} options={courseOptions.map((option) => ({ value: option.value, label: option.label }))} placeholder={t(locale, "اختر الكورس الأنسب", "Choose the most suitable course")} />
+              {form.selectedTrackId ? (
                 <p className="text-xs leading-5 text-muted-foreground">
-                  {getCourseTracks(form.suggestedCourse, locale).join(" • ")}
+                  {getCourseTrackLabel(form.selectedTrackId, locale)}
                 </p>
               ) : null}
             </div>

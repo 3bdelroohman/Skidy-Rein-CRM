@@ -94,6 +94,7 @@ export default function ParentDetailsPage({ params }: { params: Promise<{ id: st
           <div className="space-y-3">
             <SummaryRow label={t(locale, "عدد الأطفال", "Children count")} value={String(parent.childrenCount)} />
             <SummaryRow label={t(locale, "طلاب نشطون", "Active students")} value={String(parent.activeStudents)} />
+            <SummaryRow label={t(locale, "المسؤول", "Owner")} value={parent.ownerName ?? t(locale, "غير مخصص", "Unassigned")} />
             <SummaryRow label={t(locale, "إجمالي المدفوع", "Total paid")} value={formatCurrencyEgp(parent.totalPaid, locale)} />
             <SummaryRow label={t(locale, "عملاء محتملون مفتوحون", "Open leads")} value={String(parent.openLeads.length)} />
           </div>

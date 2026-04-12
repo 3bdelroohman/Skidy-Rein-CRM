@@ -79,6 +79,8 @@ export interface StudentListItem {
   parentName: string;
   parentPhone: string;
   parentId?: string | null;
+  ownerId?: string | null;
+  ownerName?: string | null;
   status: StudentStatus;
   currentCourse: CourseType | null;
   className: string | null;
@@ -94,6 +96,8 @@ export interface ParentListItem {
   whatsapp: string | null;
   email: string | null;
   city: string | null;
+  ownerId?: string | null;
+  ownerName?: string | null;
   childrenCount: number;
   children: string[];
 }

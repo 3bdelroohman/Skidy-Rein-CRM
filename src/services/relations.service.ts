@@ -134,6 +134,27 @@ function findStudentForLead(lead: LeadListItem, students: StudentListItem[], par
   );
 }
 
+
+function findRelatedLeadForParent(parent: ParentListItem, leads: LeadListItem[]): LeadListItem | null {
+  return (
+    leads.find((lead) => samePhone(lead.parentPhone, parent.phone)) ??
+    leads.find((lead) => samePhone(lead.parentPhone, parent.whatsapp)) ??
+    leads.find((lead) => sameName(lead.parentName, parent.fullName)) ??
+    null
+  );
+}
+
+function findRelatedLeadForStudent(student: StudentListItem, leads: LeadListItem[], parent: ParentListItem | null): LeadListItem | null {
+  return (
+    leads.find((lead) => {
+      if (!sameName(lead.childName, student.fullName)) return false;
+      if (parent && samePhone(lead.parentPhone, parent.phone)) return true;
+      if (samePhone(lead.parentPhone, student.parentPhone)) return true;
+      return sameName(lead.parentName, parent?.fullName ?? student.parentName);
+    }) ?? null
+  );
+}
+
 async function buildEnrollmentViews(): Promise<{ parents: ParentListItem[]; students: StudentListItem[]; leads: LeadListItem[] }> {
   const [realParents, realStudents, leads] = await Promise.all([listParents(), listStudents(), listLeads()]);
 
@@ -158,6 +179,8 @@ async function buildEnrollmentViews(): Promise<{ parents: ParentListItem[]; stud
         whatsapp: lead.parentPhone.trim() || null,
         email: null,
         city: null,
+        ownerId: lead.assignedTo || null,
+        ownerName: lead.assignedToName || null,
         childrenCount: 0,
         children: [],
       };
@@ -178,6 +201,8 @@ async function buildEnrollmentViews(): Promise<{ parents: ParentListItem[]; stud
       parentId: parent.id,
       parentName: parent.fullName,
       parentPhone: parent.phone,
+      ownerId: lead.assignedTo || null,
+      ownerName: lead.assignedToName || null,
       status: "active",
       currentCourse: lead.suggestedCourse ?? null,
       className: null,
@@ -190,12 +215,25 @@ async function buildEnrollmentViews(): Promise<{ parents: ParentListItem[]; stud
     allStudents.push(projectedStudent);
   }
 
-  const mergedStudents = [...realStudents, ...projectedStudents].sort((a, b) => b.enrollmentDate.localeCompare(a.enrollmentDate));
+  const mergedStudents = [...realStudents, ...projectedStudents]
+    .map((student) => {
+      const parent = findParentForStudent(student, allParents);
+      const relatedLead = findRelatedLeadForStudent(student, leads, parent);
+      return {
+        ...student,
+        ownerId: student.ownerId ?? relatedLead?.assignedTo ?? parent?.ownerId ?? null,
+        ownerName: student.ownerName ?? relatedLead?.assignedToName ?? parent?.ownerName ?? null,
+      };
+    })
+    .sort((a, b) => b.enrollmentDate.localeCompare(a.enrollmentDate));
 
   const mergedParents = [...realParents, ...projectedParents].map((parent) => {
     const childrenRecords = findStudentsForParent(parent, mergedStudents);
+    const relatedLead = findRelatedLeadForParent(parent, leads);
     return {
       ...parent,
+      ownerId: parent.ownerId ?? relatedLead?.assignedTo ?? null,
+      ownerName: parent.ownerName ?? relatedLead?.assignedToName ?? childrenRecords[0]?.ownerName ?? null,
       childrenCount: childrenRecords.length || parent.childrenCount,
       children: childrenRecords.map((student) => student.fullName),
     };

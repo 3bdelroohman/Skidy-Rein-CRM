@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, GraduationCap, Save } from "lucide-react";
 import { toast } from "sonner";
-import { COURSE_ROADMAP_OPTIONS, getCourseTracks, suggestCourseByAge } from "@/config/course-roadmap";
+import { getCourseFamilyFromTrack, getCourseTrackLabel, getCourseTrackOptions, suggestCourseByAge } from "@/config/course-roadmap";
 import { STUDENT_STATUS_META, getMetaLabel } from "@/config/status-meta";
 import { t } from "@/lib/locale";
 import { useUIStore } from "@/stores/ui-store";
@@ -47,17 +47,13 @@ export function StudentForm({
     age: initialValues?.age ? String(initialValues.age) : "",
     parentName: initialValues?.parentName ?? "",
     parentPhone: initialValues?.parentPhone ?? "",
-    currentCourse: (initialValues?.currentCourse ?? "") as CourseType | "",
+    selectedTrackId: "",
     status: initialValues?.status ?? ("active" as StudentStatus),
     className: initialValues?.className ?? "",
     hasPriorExperience: false,
   });
 
-  const courseOptions = useMemo(
-    () => COURSE_ROADMAP_OPTIONS.map((option) => ({ value: option.value, label: isAr ? option.formLabelAr : option.formLabelEn })),
-    [isAr],
-  );
-
+  const trackOptions = useMemo(() => getCourseTrackOptions(locale), [locale]);
   const statusOptions = useMemo(
     () => Object.entries(STUDENT_STATUS_META).map(([value, meta]) => ({ value: value as StudentStatus, label: getMetaLabel(meta, locale) })),
     [locale],
@@ -68,11 +64,18 @@ export function StudentForm({
       const next = { ...prev, [field]: value } as typeof form;
       if (field === "age") {
         const age = parseInt(value as string, 10);
-        if (!Number.isNaN(age)) next.currentCourse = suggestCourseByAge(age, next.hasPriorExperience);
+        if (!Number.isNaN(age)) {
+          const family = suggestCourseByAge(age, next.hasPriorExperience);
+          const suggestedTrack = trackOptions.find((item) => item.family === family)?.value ?? "";
+          if (!next.selectedTrackId) next.selectedTrackId = suggestedTrack;
+        }
       }
       if (field === "hasPriorExperience") {
         const age = parseInt(next.age, 10);
-        if (!Number.isNaN(age)) next.currentCourse = suggestCourseByAge(age, Boolean(value));
+        if (!Number.isNaN(age) && !next.selectedTrackId) {
+          const family = suggestCourseByAge(age, Boolean(value));
+          next.selectedTrackId = trackOptions.find((item) => item.family === family)?.value ?? "";
+        }
       }
       return next;
     });
@@ -99,7 +102,7 @@ export function StudentForm({
         age,
         parentName: form.parentName.trim(),
         parentPhone: form.parentPhone.trim(),
-        currentCourse: form.currentCourse || null,
+        currentCourse: getCourseFamilyFromTrack(form.selectedTrackId),
         status: form.status,
         className: form.className.trim() || null,
       });
@@ -137,9 +140,9 @@ export function StudentForm({
             <FormField label={t(locale, "العمر *", "Age *")} value={form.age} onChange={(value) => updateField("age", value)} placeholder="10" type="number" min={4} max={18} />
             <FormField label={t(locale, "اسم ولي الأمر *", "Parent name *")} value={form.parentName} onChange={(value) => updateField("parentName", value)} placeholder={t(locale, "مثال: أحمد محمد", "Example: Ahmed Mohamed")} />
             <FormField label={t(locale, "رقم ولي الأمر *", "Parent phone *")} value={form.parentPhone} onChange={(value) => updateField("parentPhone", value)} placeholder="01012345678" type="tel" />
-            <div className="space-y-2">
-              <FormSelect label={t(locale, "الكورس الحالي", "Current course")} value={form.currentCourse} onChange={(value) => updateField("currentCourse", value)} options={courseOptions} placeholder={t(locale, "يتحدد تلقائياً حسب العمر", "Auto-selected based on age")} />
-              {form.currentCourse ? <p className="text-xs leading-5 text-muted-foreground">{getCourseTracks(form.currentCourse, locale).join(" • ")}</p> : null}
+            <div className="space-y-2 sm:col-span-2">
+              <FormSelect label={t(locale, "الكورس / المسار", "Course / track")} value={form.selectedTrackId} onChange={(value) => updateField("selectedTrackId", value)} options={trackOptions.map((item) => ({ value: item.value, label: item.label }))} placeholder={t(locale, "اختر الكورس الأنسب", "Choose the most suitable course")} />
+              {form.selectedTrackId ? <p className="text-xs leading-5 text-muted-foreground">{getCourseTrackLabel(form.selectedTrackId, locale)}</p> : null}
             </div>
             <FormSelect label={t(locale, "الحالة", "Status")} value={form.status} onChange={(value) => updateField("status", value)} options={statusOptions} />
             <div className="sm:col-span-2">

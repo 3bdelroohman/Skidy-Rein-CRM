@@ -93,6 +93,7 @@ export default function ParentsPage() {
                       {projectedLeadId ? <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">{t(locale, "من العملاء الحاليين", "From won lead")}</span> : null}
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">{parent.phone}</p>
+                    <p className="mt-1 text-[11px] text-muted-foreground">{t(locale, "المسؤول", "Owner")}: {parent.ownerName ?? t(locale, "غير مخصص", "Unassigned")}</p>
                   </div>
                   {parent.whatsapp ? <span className="rounded-full bg-success-50 px-2 py-0.5 text-[10px] font-semibold text-success-600">WhatsApp</span> : null}
                 </div>
