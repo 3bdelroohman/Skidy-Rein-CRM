@@ -62,7 +62,7 @@ export default function SchedulePage() {
   }, [courseFilter, search, sessions]);
 
   const grouped = useMemo(() => {
-    return Array.from({ length: 5 }, (_, dayIndex) => ({
+    return Array.from({ length: 7 }, (_, dayIndex) => ({
       dayIndex,
       day: getDayLabel(dayIndex, locale),
       items: filtered
