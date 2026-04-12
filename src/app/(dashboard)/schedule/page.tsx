@@ -123,10 +123,10 @@ export default function SchedulePage() {
         </div>
       ) : (
         <>
-          <div className="hidden gap-4 xl:grid xl:grid-cols-5">
+          <div className="hidden gap-3 xl:grid xl:grid-cols-7">
             {grouped.map(({ day, items }) => (
-              <div key={day} className="rounded-2xl border border-border bg-card p-3">
-                <div className="mb-3 border-b border-border pb-3 text-center font-bold text-foreground">{day}</div>
+              <div key={day} className="rounded-2xl border border-border bg-card p-2.5">
+                <div className="mb-2 border-b border-border pb-2 text-center text-sm font-bold text-foreground">{day}</div>
                 <div className="space-y-2">
                   {items.length === 0 ? (
                     <EmptyDay label={t(locale, "لا توجد جلسات", "No sessions")} />
@@ -134,15 +134,15 @@ export default function SchedulePage() {
                     items.map((session) => {
                       const colors = COURSE_COLORS[session.course];
                       return (
-                        <Link key={session.id} href={`/schedule/${session.id}`} className={cn("block rounded-xl border p-3 transition-all hover:-translate-y-0.5 hover:shadow-sm", colors.bg, colors.border)}>
+                        <Link key={session.id} href={`/schedule/${session.id}`} className={cn("block rounded-xl border p-2.5 transition-all hover:-translate-y-0.5 hover:shadow-sm", colors.bg, colors.border)}>
                           <div className="flex items-start justify-between gap-2">
                             <div>
-                              <p className={cn("text-sm font-bold", colors.text)}>{session.className}</p>
-                              <p className="mt-1 text-[11px] text-muted-foreground">{getCourseLabel(session.course, locale)}</p>
+                              <p className={cn("text-[13px] font-bold leading-5", colors.text)}>{session.className}</p>
+                              <p className="mt-1 text-[10px] text-muted-foreground">{getCourseLabel(session.course, locale)}</p>
                             </div>
-                            <span className="rounded-lg bg-white/70 px-2 py-1 text-[11px] text-muted-foreground dark:bg-black/20">{session.startTime}</span>
+                            <span className="rounded-lg bg-white/70 px-1.5 py-1 text-[10px] text-muted-foreground dark:bg-black/20">{session.startTime}</span>
                           </div>
-                          <div className="mt-3 space-y-1 text-[11px] text-muted-foreground">
+                          <div className="mt-2 space-y-1 text-[10px] text-muted-foreground">
                             <div className="flex items-center gap-1.5"><Clock size={12} />{session.startTime} — {session.endTime}</div>
                             <div className="flex items-center gap-1.5"><Users size={12} />{session.teacher} • {session.students} {t(locale, "طلاب", "students")}</div>
                           </div>

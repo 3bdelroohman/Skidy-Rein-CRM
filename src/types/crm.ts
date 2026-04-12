@@ -354,6 +354,10 @@ export interface CreateParentInput {
   email?: string;
   city?: string;
   childrenCount?: number;
+  firstStudentName?: string;
+  firstStudentAge?: number | null;
+  firstStudentCourse?: CourseType | null;
+  firstStudentClassName?: string | null;
 }
 
 export interface CreateStudentInput {

@@ -8,9 +8,8 @@ import { getFilterLabel, t } from "@/lib/locale";
 import { STUDENT_STATUS_META, getMetaLabel } from "@/config/status-meta";
 import { formatCourseLabel, formatCurrencyEgp } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
-import { listStudents } from "@/services/students.service";
 import { syncWonLeadsToEnrollments } from "@/services/enrollment.service";
-import { listParentsWithRelations } from "@/services/relations.service";
+import { extractLeadIdFromProjectionId, listParentsWithRelations, listStudentsWithRelations } from "@/services/relations.service";
 import type { ParentListItem, StudentListItem } from "@/types/crm";
 import type { StudentStatus } from "@/types/common.types";
 import { EmptySearchState, LoadingState } from "@/components/shared/page-state";
@@ -34,7 +33,7 @@ export default function StudentsPage() {
       setLoading(true);
       try {
         await syncWonLeadsToEnrollments();
-        const [studentData, parentData] = await Promise.all([listStudents(), listParentsWithRelations()]);
+        const [studentData, parentData] = await Promise.all([listStudentsWithRelations(), listParentsWithRelations()]);
         if (isMounted) {
           setStudents(studentData);
           setParents(parentData);
@@ -126,16 +125,25 @@ export default function StudentsPage() {
                 {filtered.map((student) => {
                   const meta = STUDENT_STATUS_META[student.status];
                   const parent = parentMap.get(student.id);
+                  const projectedLeadId = extractLeadIdFromProjectionId(student.id);
+                  const studentHref = projectedLeadId ? `/leads/${projectedLeadId}` : `/students/${student.id}`;
+                  const parentLeadId = extractLeadIdFromProjectionId(parent?.id ?? null);
+                  const parentHref = parent
+                    ? (parentLeadId ? `/leads/${parentLeadId}` : `/parents/${parent.id}`)
+                    : null;
                   return (
                     <tr key={student.id} className="border-b border-border last:border-0 transition-colors hover:bg-muted/30">
                       <td className="px-4 py-3">
-                        <Link href={`/students/${student.id}`} className="group block">
+                        <Link href={studentHref} className="group block">
                           <p className="font-semibold text-foreground transition-colors group-hover:text-brand-600">{student.fullName}</p>
-                          <p className="text-xs text-muted-foreground">{student.age} {t(locale, "سنة", "years")}</p>
+                          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                            <span>{student.age > 0 ? `${student.age} ${t(locale, "سنة", "years")}` : t(locale, "العمر غير مكتمل", "Age missing")}</span>
+                            {projectedLeadId ? <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">{t(locale, "من العملاء الحاليين", "From won lead")}</span> : null}
+                          </div>
                         </Link>
                       </td>
                       <td className="px-4 py-3 text-foreground">
-                        {parent ? <Link href={`/parents/${parent.id}`} className="transition-colors hover:text-brand-600">{student.parentName}</Link> : student.parentName}
+                        {parentHref ? <Link href={parentHref} className="transition-colors hover:text-brand-600">{student.parentName}</Link> : student.parentName}
                       </td>
                       <td className="px-4 py-3"><span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: meta.bg, color: meta.color }}>{getMetaLabel(meta, locale)}</span></td>
                       <td className="px-4 py-3"><span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs text-brand-700 dark:bg-brand-950 dark:text-brand-300">{formatCourseLabel(student.currentCourse, locale)}</span></td>

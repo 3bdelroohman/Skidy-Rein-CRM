@@ -36,10 +36,14 @@ function sameName(a: string | null | undefined, b: string | null | undefined): b
   return left.length > 0 && left === right;
 }
 
-function requireLeadIdentity(lead: LeadRow): void {
-  if (!lead.parent_name || !lead.parent_phone || !lead.child_name || !lead.child_age) {
-    throw new Error("لا يمكن تحويل العميل إلى طالب لأن بيانات الطفل أو ولي الأمر غير مكتملة.");
+function requireParentIdentity(lead: LeadRow): void {
+  if (!lead.parent_name || !lead.parent_phone) {
+    throw new Error("لا يمكن تحويل العميل الحالي لأن اسم ولي الأمر أو رقم الهاتف غير مكتمل.");
   }
+}
+
+function hasEnoughStudentIdentity(lead: LeadRow): boolean {
+  return Boolean(lead.child_name && lead.child_age && lead.child_age >= 4);
 }
 
 async function getLeadById(leadId: string, supabase: ReturnType<typeof getSupabaseClient>) {
@@ -93,8 +97,8 @@ async function ensureLeadEnrollmentInternal(
   supabase: ReturnType<typeof getSupabaseClient>,
   parents: ParentRow[],
   students: StudentRow[],
-): Promise<{ parentId: string; studentId: string }> {
-  requireLeadIdentity(lead);
+): Promise<{ parentId: string; studentId: string | null }> {
+  requireParentIdentity(lead);
 
   let parent = findParent(lead, parents);
 
@@ -119,9 +123,9 @@ async function ensureLeadEnrollmentInternal(
     parents.unshift(parent);
   }
 
-  let student = findStudent(lead, parent, students);
+  let student = hasEnoughStudentIdentity(lead) ? findStudent(lead, parent, students) : null;
 
-  if (!student) {
+  if (hasEnoughStudentIdentity(lead) && !student) {
     const { data, error } = await supabase!
       .from("students")
       .insert({
@@ -147,7 +151,7 @@ async function ensureLeadEnrollmentInternal(
 
     student = data as StudentRow;
     students.unshift(student);
-  } else if (!student.parent_id || student.parent_id !== parent.id) {
+  } else if (student && (!student.parent_id || student.parent_id !== parent.id)) {
     const { data, error } = await supabase!
       .from("students")
       .update({
@@ -180,10 +184,10 @@ async function ensureLeadEnrollmentInternal(
 
   await refreshParentChildrenCount(supabase, parent, students);
 
-  return { parentId: parent.id, studentId: student.id };
+  return { parentId: parent.id, studentId: student?.id ?? null };
 }
 
-export async function ensureLeadEnrollment(leadId: string): Promise<{ parentId: string; studentId: string }> {
+export async function ensureLeadEnrollment(leadId: string): Promise<{ parentId: string; studentId: string | null }> {
   const supabase = getSupabaseClient();
   if (!supabase) {
     throw new Error("تعذر الاتصال بقاعدة البيانات. تأكد من إعدادات Supabase ثم أعد المحاولة.");

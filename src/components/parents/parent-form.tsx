@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Save, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { t } from "@/lib/locale";
 import { useUIStore } from "@/stores/ui-store";
+import { COURSE_ROADMAP_OPTIONS, getCourseTracks, suggestCourseByAge } from "@/config/course-roadmap";
 import type { CreateParentInput } from "@/types/crm";
+import type { CourseType } from "@/types/common.types";
 
 interface ParentFormProps {
   title: string;
@@ -35,10 +37,28 @@ export function ParentForm({
     whatsapp: "",
     email: "",
     city: "",
+    firstStudentName: "",
+    firstStudentAge: "",
+    firstStudentCourse: "",
+    firstStudentClassName: "",
   });
 
+  const courseOptions = useMemo(
+    () => COURSE_ROADMAP_OPTIONS.map((option) => ({ value: option.value, label: locale === "ar" ? option.formLabelAr : option.formLabelEn })),
+    [locale],
+  );
+
   const updateField = (field: keyof typeof form, value: string) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
+    setForm((prev) => {
+      const next = { ...prev, [field]: value };
+      if (field === "firstStudentAge") {
+        const age = Number(value);
+        if (Number.isFinite(age) && age >= 4 && !next.firstStudentCourse) {
+          next.firstStudentCourse = suggestCourseByAge(age);
+        }
+      }
+      return next;
+    });
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -46,6 +66,11 @@ export function ParentForm({
 
     if (!form.fullName.trim() || !form.phone.trim()) {
       toast.error(t(locale, "اسم ولي الأمر ورقم الهاتف مطلوبان", "Parent name and phone are required"));
+      return;
+    }
+
+    if (form.firstStudentName.trim() && !form.firstStudentAge.trim()) {
+      toast.error(t(locale, "إذا أدخلت اسم الطالب الأول يجب إدخال العمر أيضًا", "If you enter a first student name, age is also required"));
       return;
     }
 
@@ -57,6 +82,10 @@ export function ParentForm({
         whatsapp: form.whatsapp.trim() || form.phone.trim(),
         email: form.email.trim() || undefined,
         city: form.city.trim() || undefined,
+        firstStudentName: form.firstStudentName.trim() || undefined,
+        firstStudentAge: form.firstStudentAge.trim() ? Number(form.firstStudentAge) : undefined,
+        firstStudentCourse: form.firstStudentCourse ? (form.firstStudentCourse as CourseType) : undefined,
+        firstStudentClassName: form.firstStudentClassName.trim() || undefined,
       });
       toast.success(successMessage);
     } catch (error) {
@@ -98,6 +127,24 @@ export function ParentForm({
           </div>
         </div>
 
+        <div className="rounded-2xl border border-border bg-card p-5">
+          <div className="mb-4">
+            <h2 className="text-base font-semibold text-foreground">{t(locale, "الطالب الأول (اختياري)", "First student (optional)")}</h2>
+            <p className="mt-1 text-xs text-muted-foreground">{t(locale, "اكتب بيانات الطالب الآن إذا كنت تريد إنشاء ولي الأمر والطالب معًا من نفس الفورم.", "Enter the student now if you want to create the parent and student together from the same form.")}</p>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormField label={t(locale, "اسم الطالب", "Student name")} value={form.firstStudentName} onChange={(value) => updateField("firstStudentName", value)} placeholder={t(locale, "مثال: يوسف", "Example: Youssef")} />
+            <FormField label={t(locale, "العمر", "Age")} value={form.firstStudentAge} onChange={(value) => updateField("firstStudentAge", value)} placeholder="10" type="number" min={4} max={18} />
+            <div className="sm:col-span-2">
+              <FormSelect label={t(locale, "المسار المقترح", "Suggested track")} value={form.firstStudentCourse} onChange={(value) => updateField("firstStudentCourse", value)} options={courseOptions} placeholder={t(locale, "يتحدد تلقائيًا حسب العمر", "Auto-selected based on age")} />
+              {form.firstStudentCourse ? <p className="mt-2 text-xs leading-5 text-muted-foreground">{getCourseTracks(form.firstStudentCourse as CourseType, locale).join(" • ")}</p> : null}
+            </div>
+            <div className="sm:col-span-2">
+              <FormField label={t(locale, "اسم الكلاس", "Class name")} value={form.firstStudentClassName} onChange={(value) => updateField("firstStudentClassName", value)} placeholder={t(locale, "اختياري", "Optional")} />
+            </div>
+          </div>
+        </div>
+
         <div className="flex items-center justify-end gap-3">
           <button type="button" onClick={() => router.push(cancelHref)} className="rounded-xl px-6 py-2.5 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted">
             {t(locale, "إلغاء", "Cancel")}
@@ -117,12 +164,16 @@ function FormField({
   onChange,
   placeholder,
   type = "text",
+  min,
+  max,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   type?: string;
+  min?: number;
+  max?: number;
 }) {
   return (
     <div>
@@ -132,8 +183,36 @@ function FormField({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
+        min={min}
+        max={max}
         className="w-full rounded-xl border border-input bg-muted/50 px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-transparent focus:ring-2 focus:ring-ring"
       />
+    </div>
+  );
+}
+
+function FormSelect({
+  label,
+  value,
+  onChange,
+  options,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: Array<{ value: string; label: string }>;
+  placeholder?: string;
+}) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-sm font-medium text-foreground">{label}</label>
+      <select value={value} onChange={(event) => onChange(event.target.value)} className="w-full rounded-xl border border-input bg-muted/50 px-4 py-2.5 text-sm text-foreground focus:border-transparent focus:ring-2 focus:ring-ring">
+        {placeholder ? <option value="">{placeholder}</option> : null}
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>{option.label}</option>
+        ))}
+      </select>
     </div>
   );
 }

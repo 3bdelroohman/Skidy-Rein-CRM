@@ -1,5 +1,6 @@
 import type { CourseType } from "@/types/common.types";
 import type {
+  LeadListItem,
   ParentDetails,
   ParentListItem,
   ScheduleSessionItem,
@@ -13,6 +14,9 @@ import { listParents } from "@/services/parents.service";
 import { listScheduleSessions } from "@/services/schedule.service";
 import { getStudentById, listStudents } from "@/services/students.service";
 import { listTeachers } from "@/services/teachers.service";
+
+const LEAD_PARENT_PROJECTION_PREFIX = "lead-projection-parent:";
+const LEAD_STUDENT_PROJECTION_PREFIX = "lead-projection-student:";
 
 function normalizeName(value: string | null | undefined): string {
   return (value ?? "")
@@ -94,17 +98,132 @@ function uniqueCourses(courses: CourseType[]): CourseType[] {
   return Array.from(new Set(courses));
 }
 
+function makeProjectedParentId(leadId: string): string {
+  return `${LEAD_PARENT_PROJECTION_PREFIX}${leadId}`;
+}
+
+function makeProjectedStudentId(leadId: string): string {
+  return `${LEAD_STUDENT_PROJECTION_PREFIX}${leadId}`;
+}
+
+export function extractLeadIdFromProjectionId(id: string | null | undefined): string | null {
+  if (!id) return null;
+  if (id.startsWith(LEAD_PARENT_PROJECTION_PREFIX)) return id.slice(LEAD_PARENT_PROJECTION_PREFIX.length);
+  if (id.startsWith(LEAD_STUDENT_PROJECTION_PREFIX)) return id.slice(LEAD_STUDENT_PROJECTION_PREFIX.length);
+  return null;
+}
+
+function findParentForLead(lead: LeadListItem, parents: ParentListItem[]): ParentListItem | null {
+  return (
+    parents.find((parent) => samePhone(parent.phone, lead.parentPhone)) ??
+    parents.find((parent) => samePhone(parent.whatsapp, lead.parentPhone)) ??
+    parents.find((parent) => sameName(parent.fullName, lead.parentName)) ??
+    null
+  );
+}
+
+function findStudentForLead(lead: LeadListItem, students: StudentListItem[], parent: ParentListItem | null): StudentListItem | null {
+  return (
+    students.find((student) => {
+      if (!sameName(student.fullName, lead.childName)) return false;
+      if (parent && student.parentId && student.parentId === parent.id) return true;
+      if (samePhone(student.parentPhone, parent?.phone ?? lead.parentPhone)) return true;
+      return sameName(student.parentName, parent?.fullName ?? lead.parentName);
+    }) ?? null
+  );
+}
+
+async function buildEnrollmentViews(): Promise<{ parents: ParentListItem[]; students: StudentListItem[]; leads: LeadListItem[] }> {
+  const [realParents, realStudents, leads] = await Promise.all([listParents(), listStudents(), listLeads()]);
+
+  const wonLeads = leads.filter((lead) => lead.stage === "won");
+  const projectedParents: ParentListItem[] = [];
+  const projectedStudents: StudentListItem[] = [];
+
+  const allParents = [...realParents];
+  const allStudents = [...realStudents];
+
+  for (const lead of wonLeads) {
+    const hasParentIdentity = lead.parentName.trim().length > 0 || lead.parentPhone.trim().length > 0;
+    if (!hasParentIdentity) continue;
+
+    let parent = findParentForLead(lead, allParents);
+
+    if (!parent) {
+      parent = {
+        id: makeProjectedParentId(lead.id),
+        fullName: lead.parentName.trim() || "ولي أمر من العملاء الحاليين",
+        phone: lead.parentPhone.trim() || "—",
+        whatsapp: lead.parentPhone.trim() || null,
+        email: null,
+        city: null,
+        childrenCount: 0,
+        children: [],
+      };
+      projectedParents.push(parent);
+      allParents.push(parent);
+    }
+
+    const hasStudentIdentity = lead.childName.trim().length > 0;
+    if (!hasStudentIdentity) continue;
+
+    const existingStudent = findStudentForLead(lead, allStudents, parent);
+    if (existingStudent) continue;
+
+    const projectedStudent: StudentListItem = {
+      id: makeProjectedStudentId(lead.id),
+      fullName: lead.childName.trim(),
+      age: Number.isFinite(lead.childAge) && lead.childAge > 0 ? lead.childAge : 0,
+      parentId: parent.id,
+      parentName: parent.fullName,
+      parentPhone: parent.phone,
+      status: "active",
+      currentCourse: lead.suggestedCourse ?? null,
+      className: null,
+      enrollmentDate: lead.createdAt,
+      sessionsAttended: 0,
+      totalPaid: 0,
+    };
+
+    projectedStudents.push(projectedStudent);
+    allStudents.push(projectedStudent);
+  }
+
+  const mergedStudents = [...realStudents, ...projectedStudents].sort((a, b) => b.enrollmentDate.localeCompare(a.enrollmentDate));
+
+  const mergedParents = [...realParents, ...projectedParents].map((parent) => {
+    const childrenRecords = findStudentsForParent(parent, mergedStudents);
+    return {
+      ...parent,
+      childrenCount: childrenRecords.length || parent.childrenCount,
+      children: childrenRecords.map((student) => student.fullName),
+    };
+  });
+
+  return { parents: mergedParents, students: mergedStudents, leads };
+}
+
+export async function listStudentsWithRelations(): Promise<StudentListItem[]> {
+  const { students } = await buildEnrollmentViews();
+  return students;
+}
+
 export async function getStudentDetails(id: string): Promise<StudentDetails | null> {
-  const student = await getStudentById(id);
-  if (!student) return null;
+  const projectionLeadId = extractLeadIdFromProjectionId(id);
+  const baseStudent = projectionLeadId
+    ? (await listStudentsWithRelations()).find((student) => student.id === id) ?? null
+    : await getStudentById(id);
+
+  if (!baseStudent) return null;
 
   const [students, parents, teachers, sessions] = await Promise.all([
-    listStudents(),
-    listParents(),
+    listStudentsWithRelations(),
+    listParentsWithRelations(),
     listTeachers(),
     listScheduleSessions(),
   ]);
 
+  const student = students.find((item) => item.id === baseStudent.id) ?? baseStudent;
   const parent = findParentForStudent(student, parents);
   const siblings = parent
     ? findStudentsForParent(parent, students).filter((item) => item.id !== student.id)
@@ -127,22 +246,14 @@ export async function getStudentDetails(id: string): Promise<StudentDetails | nu
 }
 
 export async function listParentsWithRelations(): Promise<ParentListItem[]> {
-  const [parents, students] = await Promise.all([listParents(), listStudents()]);
-
-  return parents.map((parent) => {
-    const childrenRecords = findStudentsForParent(parent, students);
-    return {
-      ...parent,
-      childrenCount: childrenRecords.length || parent.childrenCount,
-      children: childrenRecords.map((student) => student.fullName),
-    };
-  });
+  const { parents } = await buildEnrollmentViews();
+  return parents;
 }
 
 export async function getParentDetails(id: string): Promise<ParentDetails | null> {
   const [parents, students, leads] = await Promise.all([
     listParentsWithRelations(),
-    listStudents(),
+    listStudentsWithRelations(),
     listLeads(),
   ]);
 
@@ -170,7 +281,7 @@ export async function getParentDetails(id: string): Promise<ParentDetails | null
 export async function listTeachersWithRelations(): Promise<TeacherListItem[]> {
   const [teachers, students, sessions] = await Promise.all([
     listTeachers(),
-    listStudents(),
+    listStudentsWithRelations(),
     listScheduleSessions(),
   ]);
 
@@ -194,7 +305,7 @@ export async function listTeachersWithRelations(): Promise<TeacherListItem[]> {
 export async function getTeacherDetails(id: string): Promise<TeacherDetails | null> {
   const [teachers, students, sessions] = await Promise.all([
     listTeachersWithRelations(),
-    listStudents(),
+    listStudentsWithRelations(),
     listScheduleSessions(),
   ]);
 
