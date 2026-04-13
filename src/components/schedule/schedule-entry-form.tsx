@@ -17,6 +17,11 @@ interface ScheduleEntryFormProps {
   successMessage: string;
   onSubmit: (payload: CreateScheduleEntryInput) => Promise<void>;
   cancelHref?: string;
+  initialValues?: {
+    className?: string;
+    teacherId?: string;
+    course?: CourseType;
+  };
 }
 
 const COURSE_OPTIONS: CourseType[] = ["scratch", "python", "web", "ai"];
@@ -31,16 +36,16 @@ function getCourseLabel(course: CourseType, locale: "ar" | "en") {
   return locale === "ar" ? labels[course].ar : labels[course].en;
 }
 
-export function ScheduleEntryForm({ title, description, submitLabel, successMessage, onSubmit, cancelHref = "/schedule" }: ScheduleEntryFormProps) {
+export function ScheduleEntryForm({ title, description, submitLabel, successMessage, onSubmit, cancelHref = "/schedule", initialValues }: ScheduleEntryFormProps) {
   const router = useRouter();
   const locale = useUIStore((state) => state.locale);
   const isAr = locale === "ar";
   const [loading, setLoading] = useState(false);
   const [teachers, setTeachers] = useState<TeacherListItem[]>([]);
   const [form, setForm] = useState({
-    className: "",
-    teacherId: "",
-    course: "scratch" as CourseType,
+    className: initialValues?.className ?? "",
+    teacherId: initialValues?.teacherId ?? "",
+    course: initialValues?.course ?? ("scratch" as CourseType),
     day: "0",
     startTime: "16:00",
     endTime: "17:00",
@@ -49,7 +54,10 @@ export function ScheduleEntryForm({ title, description, submitLabel, successMess
   useEffect(() => {
     listTeachers().then((items) => {
       setTeachers(items);
-      setForm((prev) => ({ ...prev, teacherId: prev.teacherId || items[0]?.id || "" }));
+      setForm((prev) => {
+        const hasRequestedTeacher = prev.teacherId && items.some((teacher) => teacher.id === prev.teacherId);
+        return { ...prev, teacherId: hasRequestedTeacher ? prev.teacherId : prev.teacherId || items[0]?.id || "" };
+      });
     });
   }, []);
 

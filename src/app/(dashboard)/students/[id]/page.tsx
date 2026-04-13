@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, CalendarDays, GraduationCap, MessageCircle, UserCircle, ClipboardList, FileText } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarDays, CalendarPlus, ClipboardList, FileText, GraduationCap, MessageCircle, ReceiptText, UserCircle } from "lucide-react";
 import { useUIStore } from "@/stores/ui-store";
 import { STUDENT_STATUS_META, getMetaLabel } from "@/config/status-meta";
 import { getCourseFormLabel, getCourseTracks } from "@/config/course-roadmap";
@@ -11,6 +11,7 @@ import { formatCurrencyEgp, formatDate } from "@/lib/formatters";
 import { getStudentDetails } from "@/services/relations.service";
 import { buildStudentJourney } from "@/services/student-journey.service";
 import { buildStudentReportSnapshot } from "@/services/student-report.service";
+import { getStudentFinanceSnapshot, type StudentFinanceSnapshot } from "@/services/student-finance.service";
 import { LoadingState, PageStateCard } from "@/components/shared/page-state";
 import type { StudentDetails } from "@/types/crm";
 
@@ -19,13 +20,15 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
   const locale = useUIStore((state) => state.locale);
   const isAr = locale === "ar";
   const [student, setStudent] = useState<StudentDetails | null>(null);
+  const [finance, setFinance] = useState<StudentFinanceSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
-    getStudentDetails(id).then((data) => {
+    Promise.all([getStudentDetails(id), getStudentFinanceSnapshot(id)]).then(([studentData, financeData]) => {
       if (mounted) {
-        setStudent(data);
+        setStudent(studentData);
+        setFinance(financeData);
         setLoading(false);
       }
     });
@@ -39,8 +42,8 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
       <LoadingState
         titleAr="جارِ تحميل ملف الطالب"
         titleEn="Loading student profile"
-        descriptionAr="يتم الآن تجهيز الربط بين الطالب وولي الأمر والمدرسين والجلسات المرتبطة."
-        descriptionEn="Linking the student with the parent, teachers, and related sessions now."
+        descriptionAr="يتم الآن تجهيز الربط بين الطالب وولي الأمر والمدرسين والجلسات والمدفوعات المرتبطة."
+        descriptionEn="Linking the student with the parent, teachers, sessions, and payments now."
       />
     );
   }
@@ -66,6 +69,10 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
   const report = buildStudentReportSnapshot(student);
   const primaryTeacher = student.teachers[0] ?? null;
   const linkedClassName = report.className ?? student.className ?? t(locale, "غير مسجل", "Not assigned");
+  const financeState = getFinanceStateLabel(finance?.currentState ?? "none", locale);
+  const nextDueDate = finance?.nextPendingPayment ? formatDate(finance.nextPendingPayment.dueDate, locale) : t(locale, "لا يوجد", "None");
+  const nextAmount = finance?.nextPendingPayment ? formatCurrencyEgp(finance.nextPendingPayment.amount, locale) : t(locale, "لا يوجد", "None");
+  const scheduleHref = `/schedule/new?className=${encodeURIComponent(linkedClassName)}${student.currentCourse ? `&course=${student.currentCourse}` : ""}${primaryTeacher ? `&teacherId=${primaryTeacher.id}` : ""}`;
 
   return (
     <div className="space-y-6">
@@ -133,17 +140,35 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
           </div>
 
           <div className="rounded-2xl border border-border bg-card p-5">
-            <h3 className="mb-3 flex items-center gap-2 font-bold text-foreground"><MessageCircle size={18} className="text-brand-600" />{t(locale, "المدرسون المرتبطون", "Linked teachers")}</h3>
+            <h3 className="mb-3 flex items-center gap-2 font-bold text-foreground"><ReceiptText size={18} className="text-brand-600" />{t(locale, "الملف المالي", "Finance snapshot")}</h3>
+            <div className="space-y-3">
+              <Info label={t(locale, "الحالة الحالية", "Current state")} value={financeState} />
+              <Info label={t(locale, "الفاتورة القادمة", "Next due invoice")} value={nextDueDate} />
+              <Info label={t(locale, "المبلغ القادم", "Next amount")} value={nextAmount} />
+              <Info label={t(locale, "عدد الفواتير", "Invoices")} value={String(finance?.invoiceCount ?? 0)} />
+              <Info label={t(locale, "إجمالي المفوتر", "Total billed")} value={formatCurrencyEgp(finance?.totalBilled ?? 0, locale)} />
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Link href={`/payments/new?studentId=${student.id}`} className="rounded-xl bg-brand-600 px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90">
+                {t(locale, "إضافة دفعة لهذا الطالب", "Add payment for this student")}
+              </Link>
+              <Link href="/payments" className="rounded-xl border border-border px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted">
+                {t(locale, "فتح المدفوعات", "Open payments")}
+              </Link>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-border bg-card p-5">
+            <h3 className="mb-3 flex items-center gap-2 font-bold text-foreground"><CalendarPlus size={18} className="text-brand-600" />{t(locale, "إجراءات سريعة", "Quick actions")}</h3>
             <div className="flex flex-wrap gap-2">
-              {student.teachers.length === 0 ? (
-                <span className="text-sm text-muted-foreground">{t(locale, "لا يوجد مدرس مرتبط بعد", "No linked teacher yet")}</span>
-              ) : (
-                student.teachers.map((teacher) => (
-                  <Link key={teacher.id} href={`/teachers/${teacher.id}`} className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700 dark:bg-brand-950 dark:text-brand-300">
-                    {teacher.fullName}
-                  </Link>
-                ))
-              )}
+              <Link href={scheduleHref} className="rounded-xl border border-border px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted">
+                {t(locale, "إضافة حصة مرتبطة", "Add linked session")}
+              </Link>
+              {primaryTeacher ? (
+                <Link href={`/teachers/${primaryTeacher.id}`} className="rounded-xl border border-border px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted">
+                  {t(locale, "فتح ملف المدرس", "Open teacher profile")}
+                </Link>
+              ) : null}
             </div>
           </div>
         </div>
@@ -258,4 +283,18 @@ function Info({ label, value }: { label: string; value: string }) {
 
 function EmptyCopy({ locale, ar, en }: { locale: "ar" | "en"; ar: string; en: string }) {
   return <div className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">{t(locale, ar, en)}</div>;
+}
+
+function getFinanceStateLabel(state: StudentFinanceSnapshot["currentState"], locale: "ar" | "en"): string {
+  const labels = {
+    paid: { ar: "مدفوع", en: "Paid" },
+    pending: { ar: "قيد الانتظار", en: "Pending" },
+    overdue: { ar: "متأخر", en: "Overdue" },
+    partial: { ar: "دفع جزئي", en: "Partial" },
+    refunded: { ar: "مسترد", en: "Refunded" },
+    deferred: { ar: "مؤجل", en: "Deferred" },
+    none: { ar: "لا توجد فواتير بعد", en: "No invoices yet" },
+  } as const;
+
+  return locale === "ar" ? labels[state].ar : labels[state].en;
 }
