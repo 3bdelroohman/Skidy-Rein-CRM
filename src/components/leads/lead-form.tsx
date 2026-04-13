@@ -14,19 +14,19 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import {
+  COURSE_TYPE_EN_LABELS,
+  COURSE_TYPE_LABELS,
   LEAD_SOURCE_EN_LABELS,
   LEAD_SOURCE_LABELS,
   TEMPERATURE_EN_LABELS,
   TEMPERATURE_LABELS,
 } from "@/config/labels";
-import { getCourseFamilyFromTrack, getCourseTrackGroups, getCourseTrackLabel, getCourseTrackOptions, suggestCourseByAge } from "@/config/course-roadmap";
 import { MOCK_TEAM } from "@/lib/mock-data";
 import { t } from "@/lib/locale";
-import { guardLeadDuplicate } from "@/services/duplicate-guard.service";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui-store";
 import type { CreateLeadInput } from "@/types/crm";
-import type { LeadSource, LeadTemperature } from "@/types/common.types";
+import type { CourseType, LeadSource, LeadTemperature } from "@/types/common.types";
 
 export interface LeadFormValues {
   childName: string;
@@ -36,7 +36,7 @@ export interface LeadFormValues {
   parentWhatsapp: string;
   source: LeadSource;
   temperature: LeadTemperature;
-  selectedTrackId: string;
+  suggestedCourse: CourseType | "";
   assignedTo: string;
   hasLaptop: boolean;
   hasPriorExperience: boolean;
@@ -62,7 +62,7 @@ const DEFAULT_VALUES: LeadFormValues = {
   parentWhatsapp: "",
   source: "facebook_ad",
   temperature: "warm",
-  selectedTrackId: "",
+  suggestedCourse: "",
   assignedTo: MOCK_TEAM[0]?.id ?? "",
   hasLaptop: false,
   hasPriorExperience: false,
@@ -101,8 +101,10 @@ export function LeadForm({
     [isAr],
   );
 
-  const courseOptions = useMemo(() => getCourseTrackOptions(locale).map((option) => ({ value: option.value, label: option.label, family: option.family })), [locale]);
-  const trackGroups = useMemo(() => getCourseTrackGroups(locale), [locale]);
+  const courseOptions = useMemo(
+    () => Object.entries(isAr ? COURSE_TYPE_LABELS : COURSE_TYPE_EN_LABELS).map(([value, label]) => ({ value: value as CourseType, label })),
+    [isAr],
+  );
 
   const temperatureOptions = useMemo(
     () => Object.entries(isAr ? TEMPERATURE_LABELS : TEMPERATURE_EN_LABELS).map(([value, label]) => ({ value: value as LeadTemperature, label })),
@@ -116,22 +118,8 @@ export function LeadForm({
       const next = { ...prev, [field]: value } as LeadFormValues;
       if (field === "childAge") {
         const age = parseInt(value as string, 10);
-        if (!Number.isNaN(age)) {
-          if (!next.selectedTrackId) {
-            const family = suggestCourseByAge(age, next.hasPriorExperience);
-            next.selectedTrackId = courseOptions.find((option) => option.family === family)?.value ?? "";
-          }
-        }
-      }
-
-      if (field === "hasPriorExperience") {
-        const age = parseInt(next.childAge, 10);
-        if (!Number.isNaN(age)) {
-          if (!next.selectedTrackId) {
-            const family = suggestCourseByAge(age, Boolean(value));
-            next.selectedTrackId = courseOptions.find((option) => option.family === family)?.value ?? "";
-          }
-        }
+        if (age >= 8 && age <= 12) next.suggestedCourse = "scratch";
+        else if (age > 12) next.suggestedCourse = "python";
       }
       return next;
     });
@@ -151,18 +139,6 @@ export function LeadForm({
       return;
     }
 
-    const duplicate = await guardLeadDuplicate({
-      childName: form.childName.trim(),
-      parentName: form.parentName.trim(),
-      parentPhone: form.parentPhone.trim(),
-      parentWhatsapp: form.parentWhatsapp.trim() || undefined,
-    });
-
-    if (duplicate?.blocking) {
-      toast.error(t(locale, duplicate.messageAr, duplicate.messageEn));
-      return;
-    }
-
     setLoading(true);
     try {
       const assignedToName = MOCK_TEAM.find((member) => member.id === form.assignedTo)?.name ?? t(locale, "غير مخصص", "Unassigned");
@@ -175,7 +151,7 @@ export function LeadForm({
         parentWhatsapp: form.parentWhatsapp || undefined,
         source: form.source,
         temperature: form.temperature,
-        suggestedCourse: getCourseFamilyFromTrack(form.selectedTrackId),
+        suggestedCourse: form.suggestedCourse || null,
         assignedTo: form.assignedTo,
         assignedToName,
         hasLaptop: form.hasLaptop,
@@ -220,14 +196,7 @@ export function LeadForm({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField label={t(locale, "اسم الطفل *", "Child name *")} value={form.childName} onChange={(value) => updateField("childName", value)} placeholder={t(locale, "مثال: يوسف", "Example: Youssef")} />
             <FormField label={t(locale, "العمر *", "Age *")} type="number" value={form.childAge} onChange={(value) => updateField("childAge", value)} placeholder="10" min={4} max={18} />
-            <div className="space-y-2">
-              <FormSelect label={t(locale, "الكورس / المسار", "Course / track")} value={form.selectedTrackId} onChange={(value) => updateField("selectedTrackId", value)} options={trackGroups.flatMap((group) => group.options.map((option) => ({ value: option.value, label: option.label, group: group.label })))} placeholder={t(locale, "اختر الكورس الأنسب", "Choose the most suitable course")} />
-              {form.selectedTrackId ? (
-                <p className="text-xs leading-5 text-muted-foreground">
-                  {getCourseTrackLabel(form.selectedTrackId, locale)}
-                </p>
-              ) : null}
-            </div>
+            <FormSelect label={t(locale, "الكورس المقترح", "Suggested course")} value={form.suggestedCourse} onChange={(value) => updateField("suggestedCourse", value)} options={courseOptions} placeholder={t(locale, "يتحدد تلقائياً حسب العمر", "Auto-selected based on age")} />
             <FormField label={t(locale, "اهتمامات الطفل", "Child interests")} value={form.childInterests} onChange={(value) => updateField("childInterests", value)} placeholder={t(locale, "ألعاب، برمجة، تصميم...", "Games, coding, design...")} />
 
             <div className="flex flex-wrap items-center gap-6 sm:col-span-2">
@@ -339,34 +308,17 @@ function FormSelect({
   label: string;
   value: string;
   onChange: (value: string) => void;
-  options: Array<{ value: string; label: string; group?: string }>;
+  options: Array<{ value: string; label: string }>;
   placeholder?: string;
 }) {
-  const grouped = options.reduce<Record<string, Array<{ value: string; label: string }>>>((acc, option) => {
-    const key = option.group ?? "";
-    if (!acc[key]) acc[key] = [];
-    acc[key].push({ value: option.value, label: option.label });
-    return acc;
-  }, {});
-
   return (
     <div>
       <label className="mb-1.5 block text-sm font-medium text-foreground">{label}</label>
       <select value={value} onChange={(event) => onChange(event.target.value)} className="w-full rounded-xl border border-input bg-muted/50 px-4 py-2.5 text-sm text-foreground focus:border-transparent focus:ring-2 focus:ring-ring">
         {placeholder ? <option value="">{placeholder}</option> : null}
-        {Object.entries(grouped).map(([group, groupOptions]) =>
-          group ? (
-            <optgroup key={group} label={group}>
-              {groupOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </optgroup>
-          ) : (
-            groupOptions.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))
-          ),
-        )}
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>{option.label}</option>
+        ))}
       </select>
     </div>
   );

@@ -79,8 +79,6 @@ export interface StudentListItem {
   parentName: string;
   parentPhone: string;
   parentId?: string | null;
-  ownerId?: string | null;
-  ownerName?: string | null;
   status: StudentStatus;
   currentCourse: CourseType | null;
   className: string | null;
@@ -96,8 +94,6 @@ export interface ParentListItem {
   whatsapp: string | null;
   email: string | null;
   city: string | null;
-  ownerId?: string | null;
-  ownerName?: string | null;
   childrenCount: number;
   children: string[];
 }
@@ -106,7 +102,7 @@ export interface TeacherListItem {
   id: string;
   fullName: string;
   phone: string;
-  email: string | null;
+  email: string;
   specialization: CourseType[];
   employment: EmploymentType;
   classesCount: number;
@@ -192,9 +188,6 @@ export interface ParentDetails extends ParentListItem {
 }
 
 export interface TeacherDetails extends TeacherListItem {
-  manualRating?: number | null;
-  evaluationNotes?: string | null;
-  evaluationUpdatedAt?: string | null;
   linkedSessions: ScheduleSessionItem[];
   linkedStudents: StudentListItem[];
   activeCourses: CourseType[];
@@ -353,54 +346,6 @@ export interface ActionCenterData {
   notifications: AppNotificationItem[];
 }
 
-
-export interface CreateParentInput {
-  fullName: string;
-  phone: string;
-  whatsapp?: string;
-  email?: string;
-  city?: string;
-  childrenCount?: number;
-  firstStudentName?: string;
-  firstStudentAge?: number | null;
-  firstStudentCourse?: CourseType | null;
-  firstStudentClassName?: string | null;
-}
-
-export interface CreateStudentInput {
-  fullName: string;
-  age: number;
-  parentId?: string | null;
-  parentName: string;
-  parentPhone: string;
-  status?: StudentStatus;
-  currentCourse?: CourseType | null;
-  className?: string | null;
-  enrollmentDate?: string | null;
-  sessionsAttended?: number;
-  totalPaid?: number;
-}
-
-
-
-export interface CreateTeacherInput {
-  fullName: string;
-  phone: string;
-  email?: string | null;
-  employment: EmploymentType;
-  specialization: CourseType[];
-  isActive?: boolean;
-}
-
-export interface CreateScheduleEntryInput {
-  className: string;
-  teacherId: string;
-  course: CourseType;
-  day: number;
-  startTime: string;
-  endTime: string;
-}
-
 export interface CreateLeadInput {
   childName: string;
   childAge: number;
@@ -429,6 +374,3 @@ export interface DashboardContext {
   fullName: string;
   fullNameAr: string;
 }
-
-
-export type { CourseType, StudentStatus, EmploymentType, PaymentStatus, PaymentMethod, LeadSource, LeadStage, LeadTemperature, LossReason, Priority, FollowUpType, CommChannel, UserRole } from "@/types/common.types";

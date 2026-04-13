@@ -9,7 +9,6 @@ import { getPaymentStatusLabel, t } from "@/lib/locale";
 import { cn } from "@/lib/utils";
 import {
   getBillingCycleText,
-  getPaymentArchiveState,
   getPaymentDisplayState,
   getPaymentEffectiveDueDate,
   getPaymentsSummary,
@@ -46,7 +45,6 @@ export default function PaymentsPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<DisplayStatus | "all">("all");
   const [payments, setPayments] = useState<PaymentItem[]>([]);
-  const [showArchived, setShowArchived] = useState(false);
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState({
     totalExpected: 0,
@@ -63,7 +61,7 @@ export default function PaymentsPage() {
 
     async function load() {
       setLoading(true);
-      const [data, nextSummary] = await Promise.all([listPayments({ includeArchived: showArchived }), getPaymentsSummary()]);
+      const [data, nextSummary] = await Promise.all([listPayments(), getPaymentsSummary()]);
       if (isMounted) {
         setPayments(data);
         setSummary(nextSummary);
@@ -78,7 +76,7 @@ export default function PaymentsPage() {
     return () => {
       isMounted = false;
     };
-  }, [canAccess, showArchived]);
+  }, [canAccess]);
 
   const filtered = useMemo(() => {
     return payments.filter((payment) => {
@@ -93,8 +91,6 @@ export default function PaymentsPage() {
       return matchSearch && matchStatus;
     });
   }, [payments, search, statusFilter]);
-
-  const archivedCount = useMemo(() => payments.filter((payment) => getPaymentArchiveState(payment).archived).length, [payments]);
 
   const statusCounts = useMemo(() => {
     return {
@@ -136,27 +132,17 @@ export default function PaymentsPage() {
             <p className="mt-1 text-sm text-muted-foreground">
               {t(
                 locale,
-                "الفاتورة الافتراضية مبنية على كل 4 جلسات، ويمكن تأجيل الاستحقاق عند الاتفاق مع ولي الأمر. ويمكنك الآن إظهار السجلات المؤرشفة عند الحاجة دون خلطها بالقائمة اليومية.",
-                "The default billing cycle is one invoice for every 4 sessions, with flexible deferral when agreed with the parent. You can now reveal archived records when needed without mixing them into the daily active list.",
+                "الفاتورة الافتراضية مبنية على كل 4 جلسات، ويمكن تأجيل الاستحقاق عند الاتفاق مع ولي الأمر. السجلات المؤرشفة لا تظهر هنا حتى يبقى التشغيل اليومي نظيفًا.",
+                "The default billing cycle is one invoice for every 4 sessions, with flexible deferral when agreed with the parent. Archived records are hidden from this list to keep daily operations clean.",
               )}
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowArchived((prev) => !prev)}
-              className="inline-flex items-center gap-2 rounded-2xl border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
-            >
-              {showArchived ? t(locale, "إخفاء المؤرشف", "Hide archived") : t(locale, "عرض المؤرشف", "Show archived")}
-              {archivedCount > 0 ? <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">{archivedCount}</span> : null}
-            </button>
-            {canManage ? (
-              <Link href="/payments/new" className="inline-flex items-center gap-2 rounded-2xl bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600">
-                <PlusCircle size={18} />
-                {t(locale, "إضافة دفعة", "Add payment")}
-              </Link>
-            ) : null}
-          </div>
+          {canManage ? (
+            <Link href="/payments/new" className="inline-flex items-center gap-2 rounded-2xl bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600">
+              <PlusCircle size={18} />
+              {t(locale, "إضافة دفعة", "Add payment")}
+            </Link>
+          ) : null}
         </div>
       </div>
 
@@ -215,7 +201,7 @@ export default function PaymentsPage() {
           ) : !hasFilteredResults ? (
             <div className="flex items-center justify-center gap-2 rounded-2xl border border-border bg-card p-12 text-muted-foreground">
               <AlertCircle size={18} />
-              {showArchived ? t(locale, "لا توجد مدفوعات مطابقة للفلاتر الحالية حتى مع المؤرشف", "No payments match the current filters even with archived records shown") : t(locale, "لا توجد مدفوعات مطابقة للفلاتر الحالية", "No payments match the current filters")}
+              {t(locale, "لا توجد مدفوعات مطابقة للفلاتر الحالية", "No payments match the current filters")}
             </div>
           ) : (
             <div className="overflow-hidden rounded-2xl border border-border bg-card">
@@ -237,7 +223,7 @@ export default function PaymentsPage() {
                       const displayStatus = getPaymentDisplayState(payment);
                       const meta = PAYMENT_STATUS_META[displayStatus];
                       return (
-                        <tr key={payment.id} className={cn("border-b border-border last:border-0 transition-colors hover:bg-muted/30", displayStatus === "overdue" && "bg-danger-50/50", getPaymentArchiveState(payment).archived && "bg-slate-50/70 dark:bg-slate-900/20")}>
+                        <tr key={payment.id} className={cn("border-b border-border last:border-0 transition-colors hover:bg-muted/30", displayStatus === "overdue" && "bg-danger-50/50")}>
                           <td className="px-4 py-3"><p className="font-semibold text-foreground">{payment.studentName}</p></td>
                           <td className="px-4 py-3 text-foreground">{payment.parentName}</td>
                           <td className="px-4 py-3 text-xs text-muted-foreground">{getBillingCycleText(payment, locale)}</td>
@@ -249,17 +235,10 @@ export default function PaymentsPage() {
                           </td>
                           <td className="px-4 py-3 text-xs text-muted-foreground">{formatDate(getPaymentEffectiveDueDate(payment), locale)}</td>
                           <td className="px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              {getPaymentArchiveState(payment).archived ? (
-                                <span className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200">
-                                  {t(locale, "مؤرشف", "Archived")}
-                                </span>
-                              ) : null}
-                              <Link href={`/payments/${payment.id}`} className="inline-flex items-center gap-1 rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700 transition-colors hover:bg-brand-100 dark:border-brand-900 dark:bg-brand-950 dark:text-brand-300">
-                                {t(locale, "فتح", "Open")}
-                                {isAr ? <ArrowLeft size={13} /> : <ArrowRight size={13} />}
-                              </Link>
-                            </div>
+                            <Link href={`/payments/${payment.id}`} className="inline-flex items-center gap-1 rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700 transition-colors hover:bg-brand-100 dark:border-brand-900 dark:bg-brand-950 dark:text-brand-300">
+                              {t(locale, "فتح", "Open")}
+                              {isAr ? <ArrowLeft size={13} /> : <ArrowRight size={13} />}
+                            </Link>
                           </td>
                         </tr>
                       );

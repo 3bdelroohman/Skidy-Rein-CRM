@@ -4,7 +4,6 @@ import { use, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LeadForm, type LeadFormValues } from "@/components/leads/lead-form";
 import { t } from "@/lib/locale";
-import { getDefaultTrackIdForFamily } from "@/config/course-roadmap";
 import { getLeadById, updateLead } from "@/services/leads.service";
 import { useUIStore } from "@/stores/ui-store";
 import type { CreateLeadInput, LeadListItem } from "@/types/crm";
@@ -19,7 +18,7 @@ function toInitialValues(lead: LeadListItem): Partial<LeadFormValues> {
     parentWhatsapp: lead.parentPhone,
     source: lead.source,
     temperature: lead.temperature,
-    selectedTrackId: getDefaultTrackIdForFamily(lead.suggestedCourse),
+    suggestedCourse: lead.suggestedCourse ?? "",
     assignedTo: lead.assignedTo,
     notes: lead.notes ?? "",
   };

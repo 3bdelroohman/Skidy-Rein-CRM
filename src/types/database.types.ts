@@ -10,7 +10,6 @@ import type {
   LeadSource,
   LeadStage,
   LeadTemperature,
-  EmploymentType,
   LossReason,
   PaymentMethod,
   PaymentStatus,
@@ -121,7 +120,6 @@ export interface Database {
           id: string;
           full_name: string | null;
           age: number | null;
-          parent_id: string | null;
           parent_name: string | null;
           parent_phone: string | null;
           status: StudentStatus | null;
@@ -146,68 +144,12 @@ export interface Database {
           whatsapp: string | null;
           email: string | null;
           city: string | null;
-          children_count: number | null;
           created_at: string | null;
         };
         Insert: Partial<Database["public"]["Tables"]["parents"]["Row"]> & {
           id?: string;
         };
         Update: Partial<Database["public"]["Tables"]["parents"]["Row"]>;
-        Relationships: [];
-      };
-      teachers: {
-        Row: {
-          id: string;
-          full_name: string | null;
-          phone: string | null;
-          email: string | null;
-          specialization: CourseType[] | string | null;
-          employment: EmploymentType | null;
-          classes_count: number | null;
-          students_count: number | null;
-          is_active: boolean | null;
-          created_at: string | null;
-        };
-        Insert: Partial<Database["public"]["Tables"]["teachers"]["Row"]> & {
-          id?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["teachers"]["Row"]>;
-        Relationships: [];
-      };
-      classes: {
-        Row: {
-          id: string;
-          name: string | null;
-          course: CourseType | null;
-          teacher_id: string | null;
-          day_of_week: number | null;
-          start_time: string | null;
-          end_time: string | null;
-          is_active: boolean | null;
-          created_at: string | null;
-        };
-        Insert: Partial<Database["public"]["Tables"]["classes"]["Row"]> & {
-          id?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["classes"]["Row"]>;
-        Relationships: [];
-      };
-      sessions: {
-        Row: {
-          id: string;
-          class_id: string | null;
-          teacher_id: string | null;
-          title: string | null;
-          session_date: string | null;
-          start_time: string | null;
-          end_time: string | null;
-          day_of_week: number | null;
-          created_at: string | null;
-        };
-        Insert: Partial<Database["public"]["Tables"]["sessions"]["Row"]> & {
-          id?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["sessions"]["Row"]>;
         Relationships: [];
       };
       payments: {

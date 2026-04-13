@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, ReceiptText, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 
@@ -31,7 +31,6 @@ export default function NewPaymentPage() {
   const user = useCurrentUser();
   const canManage = canManagePaymentsForUser(user);
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [students, setStudents] = useState<StudentListItem[]>([]);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
@@ -48,14 +47,8 @@ export default function NewPaymentPage() {
   });
 
   useEffect(() => {
-    listStudents().then((items) => {
-      setStudents(items);
-      const requestedStudentId = searchParams.get("studentId");
-      if (requestedStudentId && items.some((student) => student.id === requestedStudentId)) {
-        setForm((prev) => ({ ...prev, studentId: prev.studentId || requestedStudentId }));
-      }
-    });
-  }, [searchParams]);
+    listStudents().then(setStudents);
+  }, []);
 
   const selectedStudent = useMemo(
     () => students.find((student) => student.id === form.studentId) ?? null,

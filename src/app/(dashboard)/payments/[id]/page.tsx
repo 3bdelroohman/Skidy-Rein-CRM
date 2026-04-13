@@ -27,7 +27,7 @@ import {
   getPaymentDetails,
   getPaymentDisplayState,
   getPaymentEffectiveDueDate,
-  restorePayment,
+  restoreArchivedPayment,
   updatePaymentStatus,
 } from "@/services/payments.service";
 import { useUIStore } from "@/stores/ui-store";
@@ -144,7 +144,7 @@ export default function PaymentDetailsPage({ params }: { params: Promise<{ id: s
 
     try {
       setRecordAction("restore");
-      await restorePayment(payment.id);
+      await restoreArchivedPayment(payment.id);
       await refreshPayment();
       toast.success(t(locale, "تمت استعادة الدفعة للأرشيف النشط", "Payment restored to the active list"));
     } catch (error) {

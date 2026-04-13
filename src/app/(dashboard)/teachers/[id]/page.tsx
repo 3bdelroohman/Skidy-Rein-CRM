@@ -1,172 +1,34 @@
 "use client";
 
-import { use, useEffect, useMemo, useState } from "react";
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, FileText, Phone, RefreshCcw, Save, Star, Trash2, Users, Wallet } from "lucide-react";
-import { toast } from "sonner";
+import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, Mail, Phone, Users } from "lucide-react";
 import { useUIStore } from "@/stores/ui-store";
-import { formatCourseLabel, formatCurrencyEgp } from "@/lib/formatters";
-import { buildStudentReportSnapshot } from "@/services/student-report.service";
+import { formatCourseLabel } from "@/lib/formatters";
 import { getEmploymentTypeLabel, t } from "@/lib/locale";
 import { getTeacherDetails } from "@/services/relations.service";
-import { saveTeacherEvaluation } from "@/services/teacher-evaluations.service";
-import { computeTeacherFinanceSummary, getTeacherFinanceConfig, saveTeacherFinanceConfig } from "@/services/teacher-finance.service";
-import { deleteTeacher, listTeachers } from "@/services/teachers.service";
-import { reassignTeacherRelations } from "@/services/teacher-reassignment.service";
 import { LoadingState, PageStateCard } from "@/components/shared/page-state";
-import type { CourseType, TeacherDetails, TeacherListItem } from "@/types/crm";
-
-type TeacherLinkedStudentForReport = TeacherDetails["linkedStudents"][number] & {
-  teachers?: { fullName: string }[];
-  relatedSessions?: { className: string }[];
-};
+import type { TeacherDetails } from "@/types/crm";
 
 export default function TeacherDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const locale = useUIStore((state) => state.locale);
   const isAr = locale === "ar";
-  const router = useRouter();
   const [teacher, setTeacher] = useState<TeacherDetails | null>(null);
   const [loading, setLoading] = useState(true);
-  const [rating, setRating] = useState("3");
-  const [notes, setNotes] = useState("");
-  const [sessionRate60, setSessionRate60] = useState("120");
-  const [sessionRate90, setSessionRate90] = useState("180");
-  const [sessionRate120, setSessionRate120] = useState("240");
-  const [trackAdjustments, setTrackAdjustments] = useState<Record<CourseType, string>>({ scratch: "0", python: "20", web: "30", ai: "40" });
-  const [financeNotes, setFinanceNotes] = useState("");
-  const [deleting, setDeleting] = useState(false);
-  const [reassigning, setReassigning] = useState(false);
-  const [candidates, setCandidates] = useState<TeacherListItem[]>([]);
-  const [reassignTo, setReassignTo] = useState("");
-
-  async function loadTeacherPage() {
-    setLoading(true);
-    const [data, teacherItems] = await Promise.all([getTeacherDetails(id), listTeachers()]);
-    setTeacher(data);
-    setRating(data?.manualRating ? String(data.manualRating) : "3");
-    setNotes(data?.evaluationNotes ?? "");
-    const finance = getTeacherFinanceConfig(id);
-    setSessionRate60(String(finance.sessionRate60));
-    setSessionRate90(String(finance.sessionRate90));
-    setSessionRate120(String(finance.sessionRate120));
-    setTrackAdjustments({ scratch: String(finance.trackAdjustments.scratch), python: String(finance.trackAdjustments.python), web: String(finance.trackAdjustments.web), ai: String(finance.trackAdjustments.ai) });
-    setFinanceNotes(finance.notes ?? "");
-
-    const nextCandidates = teacherItems
-      .filter((item) => item.id !== id && item.isActive)
-      .sort((a, b) => a.fullName.localeCompare(b.fullName, "ar"));
-
-    setCandidates(nextCandidates);
-    setReassignTo((prev) => (prev && nextCandidates.some((item) => item.id === prev) ? prev : nextCandidates[0]?.id ?? ""));
-    setLoading(false);
-  }
 
   useEffect(() => {
     let mounted = true;
-    (async () => {
-      const [data, teacherItems] = await Promise.all([getTeacherDetails(id), listTeachers()]);
-      if (!mounted) return;
-      setTeacher(data);
-      setRating(data?.manualRating ? String(data.manualRating) : "3");
-      setNotes(data?.evaluationNotes ?? "");
-      const finance = getTeacherFinanceConfig(id);
-      setSessionRate60(String(finance.sessionRate60));
-      setSessionRate90(String(finance.sessionRate90));
-      setSessionRate120(String(finance.sessionRate120));
-      setTrackAdjustments({ scratch: String(finance.trackAdjustments.scratch), python: String(finance.trackAdjustments.python), web: String(finance.trackAdjustments.web), ai: String(finance.trackAdjustments.ai) });
-      setFinanceNotes(finance.notes ?? "");
-      const nextCandidates = teacherItems
-        .filter((item) => item.id !== id && item.isActive)
-        .sort((a, b) => a.fullName.localeCompare(b.fullName, "ar"));
-      setCandidates(nextCandidates);
-      setReassignTo(nextCandidates[0]?.id ?? "");
-      setLoading(false);
-    })();
+    getTeacherDetails(id).then((data) => {
+      if (mounted) {
+        setTeacher(data);
+        setLoading(false);
+      }
+    });
     return () => {
       mounted = false;
     };
   }, [id]);
-
-  const reportSummaries = useMemo(
-    () => teacher?.linkedStudents.map((student) => ({ student, snapshot: buildStudentReportSnapshot(student as TeacherLinkedStudentForReport) })) ?? [],
-    [teacher],
-  );
-  const readyReports = reportSummaries.filter((item) => item.snapshot.ready).length;
-  const needsAttention = reportSummaries.length - readyReports;
-  const nextCheckpoint = [...reportSummaries].sort((a, b) => a.snapshot.sessionsUntilNext - b.snapshot.sessionsUntilNext)[0] ?? null;
-  const hasBlockingSessions = (teacher?.linkedSessions?.length ?? 0) > 0;
-  const financeSummary = useMemo(() => {
-    if (!teacher) return null;
-    const config = getTeacherFinanceConfig(teacher.id);
-    return computeTeacherFinanceSummary(teacher.linkedSessions, config);
-  }, [teacher, sessionRate60, sessionRate90, sessionRate120, trackAdjustments]);
-
-  function handleSaveFinance() {
-    if (!teacher) return;
-    saveTeacherFinanceConfig({
-      teacherId: teacher.id,
-      sessionRate60: Number(sessionRate60) || 0,
-      sessionRate90: Number(sessionRate90) || 0,
-      sessionRate120: Number(sessionRate120) || 0,
-      trackAdjustments: {
-        scratch: Number(trackAdjustments.scratch) || 0,
-        python: Number(trackAdjustments.python) || 0,
-        web: Number(trackAdjustments.web) || 0,
-        ai: Number(trackAdjustments.ai) || 0,
-      },
-      notes: financeNotes,
-    });
-    toast.success(t(locale, "تم حفظ الإعدادات المالية", "Finance settings saved"));
-  }
-
-  async function handleDeleteTeacher() {
-    if (!teacher) return;
-    if (hasBlockingSessions) {
-      toast.error(t(locale, "انقل الحصص أولًا إلى مدرس آخر ثم احذف المدرس.", "Reassign sessions first, then delete the teacher."));
-      return;
-    }
-
-    const confirmed = window.confirm(
-      t(locale, "سيتم حذف المدرس نهائيًا. هل تريد المتابعة؟", "This will permanently delete the teacher. Do you want to continue?"),
-    );
-    if (!confirmed) return;
-
-    setDeleting(true);
-    const ok = await deleteTeacher(teacher.id);
-    setDeleting(false);
-
-    if (!ok) {
-      toast.error(t(locale, "تعذر حذف المدرس", "Failed to delete teacher"));
-      return;
-    }
-
-    toast.success(t(locale, "تم حذف المدرس", "Teacher deleted"));
-    router.push("/teachers");
-  }
-
-  async function handleReassignTeacher() {
-    if (!teacher || !reassignTo) return;
-    setReassigning(true);
-    const result = await reassignTeacherRelations(teacher.id, reassignTo);
-    setReassigning(false);
-
-    if (result.classesUpdated === 0 && result.sessionsUpdated === 0) {
-      toast.error(t(locale, "لم يتم العثور على حصص مرتبطة لنقلها", "No linked sessions were found to reassign"));
-      return;
-    }
-
-    toast.success(
-      t(
-        locale,
-        `تم نقل ${result.classesUpdated} كلاس و ${result.sessionsUpdated} جلسة إلى المدرس الجديد`,
-        `Reassigned ${result.classesUpdated} classes and ${result.sessionsUpdated} sessions to the new teacher`,
-      ),
-    );
-
-    await loadTeacherPage();
-  }
 
   if (loading) {
     return (
@@ -206,73 +68,6 @@ export default function TeacherDetailsPage({ params }: { params: Promise<{ id: s
         </div>
       </div>
 
-      <div className="rounded-2xl border border-brand-200 bg-brand-50/50 p-4 dark:border-brand-900/50 dark:bg-brand-950/20">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-sm font-bold text-foreground">{t(locale, "نقل ارتباطات المدرس", "Teacher reassignment")}</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {t(
-                locale,
-                "إذا أردت حذف المدرس، انقل الحصص المرتبطة أولًا إلى مدرس آخر ثم احذف الملف بأمان.",
-                "If you want to delete this teacher, reassign linked sessions first, then delete the profile safely.",
-              )}
-            </p>
-          </div>
-          <div className="grid w-full gap-3 lg:max-w-xl lg:grid-cols-[minmax(0,1fr)_auto]">
-            <select
-              value={reassignTo}
-              onChange={(event) => setReassignTo(event.target.value)}
-              className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground focus:border-transparent focus:ring-2 focus:ring-ring"
-            >
-              {candidates.length === 0 ? (
-                <option value="">{t(locale, "لا يوجد مدرس آخر نشط", "No other active teacher")}</option>
-              ) : (
-                candidates.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.fullName}
-                  </option>
-                ))
-              )}
-            </select>
-            <button
-              type="button"
-              onClick={handleReassignTeacher}
-              disabled={reassigning || !reassignTo || !hasBlockingSessions}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <RefreshCcw size={16} />
-              {reassigning ? t(locale, "جارِ النقل...", "Reassigning...") : t(locale, "نقل الحصص لهذا المدرس", "Reassign sessions")}
-            </button>
-          </div>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
-          <span className="rounded-full bg-background px-3 py-1">{t(locale, "حصص مرتبطة", "Linked sessions")}: {teacher.linkedSessions.length}</span>
-          <span className="rounded-full bg-background px-3 py-1">{t(locale, "طلاب ظاهرون في الملف", "Visible students")}: {teacher.linkedStudents.length}</span>
-        </div>
-      </div>
-
-      <div className="rounded-2xl border border-red-200 bg-red-50/70 p-4 dark:border-red-900/50 dark:bg-red-950/20">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-sm font-bold text-foreground">{t(locale, "حذف المدرس", "Delete teacher")}</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {hasBlockingSessions
-                ? t(locale, "انقل الحصص المرتبطة أولًا ثم احذف المدرس.", "Reassign linked sessions first, then delete the teacher.")
-                : t(locale, "سيتم حذف المدرس نهائيًا من النظام.", "The teacher will be permanently removed from the system.")}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={handleDeleteTeacher}
-            disabled={deleting || hasBlockingSessions}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-900/50 dark:bg-transparent dark:text-red-300 dark:hover:bg-red-950/30"
-          >
-            <Trash2 size={16} />
-            {deleting ? t(locale, "جارِ الحذف...", "Deleting...") : t(locale, "حذف المدرس", "Delete teacher")}
-          </button>
-        </div>
-      </div>
-
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="rounded-2xl border border-border bg-card p-5 lg:col-span-2">
           <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-foreground"><BookOpen size={20} className="text-brand-600" />{t(locale, "التخصصات والدورات", "Specializations and courses")}</h2>
@@ -283,12 +78,6 @@ export default function TeacherDetailsPage({ params }: { params: Promise<{ id: s
           <div className="grid grid-cols-2 gap-3">
             <Metric label={t(locale, "الكلاسات الحالية", "Current classes")} value={teacher.classesCount.toString()} />
             <Metric label={t(locale, "إجمالي الطلاب", "Total students")} value={teacher.studentsCount.toString()} />
-          </div>
-
-          <div className="mt-6 flex flex-wrap gap-2">
-            <Link href={`/schedule/new?teacherId=${teacher.id}${teacher.specialization[0] ? `&course=${teacher.specialization[0]}` : ""}`} className="rounded-xl bg-brand-600 px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90">
-              {t(locale, "إضافة حصة لهذا المدرس", "Add session for this teacher")}
-            </Link>
           </div>
 
           <div className="mt-6">
@@ -309,97 +98,9 @@ export default function TeacherDetailsPage({ params }: { params: Promise<{ id: s
           <h3 className="mb-3 flex items-center gap-2 font-bold text-foreground"><Users size={18} className="text-brand-600" />{t(locale, "بيانات التواصل", "Contact details")}</h3>
           <div className="space-y-3">
             <Info icon={Phone} label={t(locale, "الهاتف", "Phone")} value={teacher.phone} href={`tel:${teacher.phone}`} />
+            <Info icon={Mail} label={t(locale, "البريد", "Email")} value={teacher.email} href={`mailto:${teacher.email}`} />
             <Info icon={BookOpen} label={t(locale, "الحالة", "Status")} value={teacher.isActive ? t(locale, "نشط", "Active") : t(locale, "غير نشط", "Inactive")} />
           </div>
-        </div>
-
-        <div className="rounded-2xl border border-border bg-card p-5">
-          <h3 className="mb-3 flex items-center gap-2 font-bold text-foreground"><Star size={18} className="text-brand-600" />{t(locale, "التقييم", "Evaluation")}</h3>
-          <div className="space-y-3">
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-foreground">{t(locale, "التقييم العام", "Overall rating")}</label>
-              <select value={rating} onChange={(event) => setRating(event.target.value)} className="w-full rounded-xl border border-input bg-muted/50 px-4 py-2.5 text-sm text-foreground focus:border-transparent focus:ring-2 focus:ring-ring">
-                {[1,2,3,4,5].map((item) => <option key={item} value={item}>{item}/5</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-foreground">{t(locale, "ملاحظات التقييم", "Evaluation notes")}</label>
-              <textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={4} className="w-full rounded-xl border border-input bg-muted/50 px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-transparent focus:ring-2 focus:ring-ring" />
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                const saved = saveTeacherEvaluation({ teacherId: teacher.id, rating: Number(rating), notes });
-                setTeacher((prev) => prev ? { ...prev, manualRating: saved.rating, evaluationNotes: saved.notes, evaluationUpdatedAt: saved.updatedAt } : prev);
-              }}
-              className="inline-flex items-center gap-2 rounded-xl bg-brand-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
-            >
-              <Save size={16} />
-              {t(locale, "حفظ التقييم", "Save evaluation")}
-            </button>
-            {teacher.evaluationUpdatedAt ? <p className="text-xs text-muted-foreground">{t(locale, "آخر تحديث", "Last updated")}: {new Date(teacher.evaluationUpdatedAt).toLocaleString(isAr ? "ar-EG" : "en-US")}</p> : null}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-border bg-card p-5">
-          <h3 className="mb-3 flex items-center gap-2 font-bold text-foreground"><Wallet size={18} className="text-brand-600" />{t(locale, "الجزء المالي", "Finance")}</h3>
-          <div className="grid grid-cols-3 gap-2 text-center text-xs">
-            <Metric label={t(locale, "أسبوعي تقديري", "Weekly est.")} value={financeSummary ? formatCurrencyEgp(financeSummary.weeklyEstimated, locale) : formatCurrencyEgp(0, locale)} />
-            <Metric label={t(locale, "شهري تقديري", "Monthly est.")} value={financeSummary ? formatCurrencyEgp(financeSummary.monthlyEstimated, locale) : formatCurrencyEgp(0, locale)} />
-            <Metric label={t(locale, "متوسط الحصة", "Avg session")} value={financeSummary ? formatCurrencyEgp(financeSummary.averagePerSession, locale) : formatCurrencyEgp(0, locale)} />
-          </div>
-          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <MoneyInput label={t(locale, "حصة 60 دقيقة", "60-min session")} value={sessionRate60} onChange={setSessionRate60} />
-            <MoneyInput label={t(locale, "حصة 90 دقيقة", "90-min session")} value={sessionRate90} onChange={setSessionRate90} />
-            <MoneyInput label={t(locale, "حصة 120 دقيقة", "120-min session")} value={sessionRate120} onChange={setSessionRate120} />
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <MoneyInput label="Scratch" value={trackAdjustments.scratch} onChange={(value) => setTrackAdjustments((prev) => ({ ...prev, scratch: value }))} hint={t(locale, "إضافة/خصم لكل حصة", "Adjustment per session")} />
-            <MoneyInput label="Python" value={trackAdjustments.python} onChange={(value) => setTrackAdjustments((prev) => ({ ...prev, python: value }))} hint={t(locale, "إضافة/خصم لكل حصة", "Adjustment per session")} />
-            <MoneyInput label="Web" value={trackAdjustments.web} onChange={(value) => setTrackAdjustments((prev) => ({ ...prev, web: value }))} hint={t(locale, "إضافة/خصم لكل حصة", "Adjustment per session")} />
-            <MoneyInput label="AI" value={trackAdjustments.ai} onChange={(value) => setTrackAdjustments((prev) => ({ ...prev, ai: value }))} hint={t(locale, "إضافة/خصم لكل حصة", "Adjustment per session")} />
-          </div>
-          <div className="mt-4">
-            <label className="mb-1.5 block text-sm font-medium text-foreground">{t(locale, "ملاحظات الحساب", "Finance notes")}</label>
-            <textarea value={financeNotes} onChange={(event) => setFinanceNotes(event.target.value)} rows={3} className="w-full rounded-xl border border-input bg-muted/50 px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-transparent focus:ring-2 focus:ring-ring" />
-          </div>
-          <button type="button" onClick={handleSaveFinance} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-brand-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600">
-            <Save size={16} />
-            {t(locale, "حفظ الإعدادات المالية", "Save finance settings")}
-          </button>
-          {financeSummary && financeSummary.lines.length > 0 ? (
-            <div className="mt-4 space-y-2">
-              <p className="text-sm font-bold text-foreground">{t(locale, "تفصيل الحصص التقديري", "Estimated session breakdown")}</p>
-              {financeSummary.lines.slice(0, 6).map((line) => (
-                <div key={line.sessionId} className="flex items-center justify-between gap-3 rounded-xl bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                  <span>{line.className} • {line.minutes} {t(locale, "دقيقة", "min")}</span>
-                  <span className="font-semibold text-foreground">{line.payout} {t(locale, "ج.م", "EGP")}</span>
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </div>
-
-        <div className="rounded-2xl border border-border bg-card p-5">
-          <h3 className="mb-3 flex items-center gap-2 font-bold text-foreground"><FileText size={18} className="text-brand-600" />{t(locale, "المتابعة التشغيلية", "Operational follow-up")}</h3>
-          <div className="space-y-3">
-            <Metric label={t(locale, "تقارير جاهزة", "Reports ready")} value={String(readyReports)} />
-            <Metric label={t(locale, "تحتاج متابعة", "Need follow-up")} value={String(needsAttention)} />
-          </div>
-          {nextCheckpoint ? (
-            <div className="mt-4 rounded-xl bg-muted/40 p-3 text-sm text-muted-foreground">
-              <p className="font-semibold text-foreground">{nextCheckpoint.student.fullName}</p>
-              <p className="mt-1">{t(locale, "الأقرب للتقرير التالي", "Closest to next report")}: {nextCheckpoint.snapshot.sessionsUntilNext} {t(locale, "حصص", "sessions")}</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Link href={`/students/${nextCheckpoint.student.id}/report`} className="rounded-xl border border-border px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted">
-                  {t(locale, "فتح التقرير", "Open report")}
-                </Link>
-                <Link href={`/students/${nextCheckpoint.student.id}`} className="rounded-xl border border-border px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted">
-                  {t(locale, "ملف الطالب", "Student profile")}
-                </Link>
-              </div>
-            </div>
-          ) : null}
         </div>
       </div>
 
@@ -436,12 +137,8 @@ export default function TeacherDetailsPage({ params }: { params: Promise<{ id: s
                   <div>
                     <p className="font-semibold text-foreground">{student.fullName}</p>
                     <p className="mt-1 text-xs text-muted-foreground">{student.className ?? t(locale, "غير مسجل", "Not assigned")}</p>
-                    <p className="mt-2 text-[11px] text-brand-700 dark:text-brand-300">{t(locale, "افتح تقرير الطالب من الملف", "Open the student report from the profile")}</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">{student.parentName}</span>
-                    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">{buildStudentReportSnapshot(student as TeacherLinkedStudentForReport).ready ? t(locale, "تقرير جاهز", "Report ready") : t(locale, "قيد المتابعة", "In progress")}</span>
-                  </div>
+                  <span className="text-xs text-muted-foreground">{student.parentName}</span>
                 </Link>
               ))}
             </div>
@@ -460,16 +157,6 @@ function Info({ icon: Icon, label, value, href }: { icon: typeof Phone; label: s
   const content = <div className="rounded-xl bg-muted/40 p-3"><div className="flex items-center gap-2 text-xs text-muted-foreground"><Icon size={14} />{label}</div><p className="mt-1 font-semibold text-foreground">{value}</p></div>;
   if (!href) return content;
   return <a href={href} className="block transition-opacity hover:opacity-85">{content}</a>;
-}
-
-function MoneyInput({ label, value, onChange, hint }: { label: string; value: string; onChange: (value: string) => void; hint?: string }) {
-  return (
-    <div>
-      <label className="mb-1.5 block text-sm font-medium text-foreground">{label}</label>
-      <input value={value} onChange={(event) => onChange(event.target.value)} inputMode="numeric" className="w-full rounded-xl border border-input bg-muted/50 px-4 py-2.5 text-sm text-foreground focus:border-transparent focus:ring-2 focus:ring-ring" />
-      {hint ? <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p> : null}
-    </div>
-  );
 }
 
 function EmptyCopy({ locale, ar, en }: { locale: "ar" | "en"; ar: string; en: string }) {

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight, CalendarDays, CalendarPlus, Clock, Search, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarDays, Clock, Search, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { listScheduleSessions, getScheduleOverview } from "@/services/schedule.service";
 import { useUIStore } from "@/stores/ui-store";
@@ -62,7 +62,7 @@ export default function SchedulePage() {
   }, [courseFilter, search, sessions]);
 
   const grouped = useMemo(() => {
-    return Array.from({ length: 7 }, (_, dayIndex) => ({
+    return Array.from({ length: 5 }, (_, dayIndex) => ({
       dayIndex,
       day: getDayLabel(dayIndex, locale),
       items: filtered
@@ -73,24 +73,17 @@ export default function SchedulePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 rounded-3xl border border-border bg-card p-6 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
-            <CalendarDays size={28} className="text-brand-600" />
-            {t(locale, "الجدول", "Schedule")}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {t(locale, "عرض أسبوعي للكلاسات، الأحمال، وأهم الجلسات الجارية", "Weekly view of classes, load, and ongoing sessions")}
-          </p>
-        </div>
-
-        <Link href="/schedule/new" className="inline-flex items-center gap-2 rounded-xl bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600">
-          <CalendarPlus size={18} />
-          {t(locale, "إضافة حصة / حدث", "Add session / event")}
-        </Link>
+      <div className="rounded-3xl border border-border bg-card p-6">
+        <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
+          <CalendarDays size={28} className="text-brand-600" />
+          {t(locale, "الجدول", "Schedule")}
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {t(locale, "عرض أسبوعي للكلاسات، الأحمال، وأهم الجلسات الجارية", "Weekly view of classes, load, and ongoing sessions")}
+        </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         <MiniMetric label={t(locale, "عدد الجلسات", "Sessions")} value={overview.sessionsCount} />
         <MiniMetric label={t(locale, "إجمالي المقاعد", "Total seats")} value={overview.totalStudents} />
         <MiniMetric label={t(locale, "عدد المدرسين", "Teachers")} value={overview.uniqueTeachers} />
@@ -130,10 +123,10 @@ export default function SchedulePage() {
         </div>
       ) : (
         <>
-          <div className="hidden gap-2 lg:grid lg:grid-cols-7 xl:gap-3">
+          <div className="hidden gap-4 xl:grid xl:grid-cols-5">
             {grouped.map(({ day, items }) => (
-              <div key={day} className="min-w-0 rounded-2xl border border-border bg-card p-2">
-                <div className="mb-2 truncate border-b border-border pb-2 text-center text-xs font-bold text-foreground xl:text-sm">{day}</div>
+              <div key={day} className="rounded-2xl border border-border bg-card p-3">
+                <div className="mb-3 border-b border-border pb-3 text-center font-bold text-foreground">{day}</div>
                 <div className="space-y-2">
                   {items.length === 0 ? (
                     <EmptyDay label={t(locale, "لا توجد جلسات", "No sessions")} />
@@ -141,17 +134,17 @@ export default function SchedulePage() {
                     items.map((session) => {
                       const colors = COURSE_COLORS[session.course];
                       return (
-                        <Link key={session.id} href={`/schedule/${session.id}`} className={cn("block min-w-0 rounded-xl border p-2 transition-all hover:-translate-y-0.5 hover:shadow-sm", colors.bg, colors.border)}>
+                        <Link key={session.id} href={`/schedule/${session.id}`} className={cn("block rounded-xl border p-3 transition-all hover:-translate-y-0.5 hover:shadow-sm", colors.bg, colors.border)}>
                           <div className="flex items-start justify-between gap-2">
                             <div>
-                              <p className={cn("truncate text-[12px] font-bold leading-4 xl:text-[13px]", colors.text)}>{session.className}</p>
-                              <p className="mt-1 truncate text-[9px] text-muted-foreground xl:text-[10px]">{getCourseLabel(session.course, locale)}</p>
+                              <p className={cn("text-sm font-bold", colors.text)}>{session.className}</p>
+                              <p className="mt-1 text-[11px] text-muted-foreground">{getCourseLabel(session.course, locale)}</p>
                             </div>
-                            <span className="shrink-0 rounded-lg bg-white/70 px-1.5 py-1 text-[9px] text-muted-foreground dark:bg-black/20 xl:text-[10px]">{session.startTime}</span>
+                            <span className="rounded-lg bg-white/70 px-2 py-1 text-[11px] text-muted-foreground dark:bg-black/20">{session.startTime}</span>
                           </div>
-                          <div className="mt-2 space-y-1 text-[9px] text-muted-foreground xl:text-[10px]">
+                          <div className="mt-3 space-y-1 text-[11px] text-muted-foreground">
                             <div className="flex items-center gap-1.5"><Clock size={12} />{session.startTime} — {session.endTime}</div>
-                            <div className="flex items-center gap-1.5"><Users size={12} /><span className="truncate">{session.teacher}</span><span className="shrink-0">• {session.students} {t(locale, "طلاب", "students")}</span></div>
+                            <div className="flex items-center gap-1.5"><Users size={12} />{session.teacher} • {session.students} {t(locale, "طلاب", "students")}</div>
                           </div>
                         </Link>
                       );

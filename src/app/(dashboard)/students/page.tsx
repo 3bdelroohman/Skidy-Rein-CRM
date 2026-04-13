@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { GraduationCap, Plus, Search } from "lucide-react";
+import { GraduationCap, Search } from "lucide-react";
 import { useUIStore } from "@/stores/ui-store";
 import { getFilterLabel, t } from "@/lib/locale";
 import { STUDENT_STATUS_META, getMetaLabel } from "@/config/status-meta";
 import { formatCourseLabel, formatCurrencyEgp } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
-import { syncWonLeadsToEnrollments } from "@/services/enrollment.service";
-import { extractLeadIdFromProjectionId, listParentsWithRelations, listStudentsWithRelations } from "@/services/relations.service";
+import { listStudents } from "@/services/students.service";
+import { listParentsWithRelations } from "@/services/relations.service";
 import type { ParentListItem, StudentListItem } from "@/types/crm";
 import type { StudentStatus } from "@/types/common.types";
 import { EmptySearchState, LoadingState } from "@/components/shared/page-state";
@@ -31,15 +31,11 @@ export default function StudentsPage() {
     let isMounted = true;
     async function load() {
       setLoading(true);
-      try {
-        await syncWonLeadsToEnrollments();
-        const [studentData, parentData] = await Promise.all([listStudentsWithRelations(), listParentsWithRelations()]);
-        if (isMounted) {
-          setStudents(studentData);
-          setParents(parentData);
-        }
-      } finally {
-        if (isMounted) setLoading(false);
+      const [studentData, parentData] = await Promise.all([listStudents(), listParentsWithRelations()]);
+      if (isMounted) {
+        setStudents(studentData);
+        setParents(parentData);
+        setLoading(false);
       }
     }
     load();
@@ -71,19 +67,12 @@ export default function StudentsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
-            <GraduationCap size={28} className="text-brand-600" />
-            {t(locale, "الطلاب", "Students")}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">{t(locale, "رؤية أوضح للطلاب الحاليين وربطهم بأولياء الأمور والكلاسات", "A clearer view of current students and their parent and class relationships")}</p>
-        </div>
-
-        <Link href="/students/new" className="inline-flex items-center gap-2 rounded-xl bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600">
-          <Plus size={18} />
-          {t(locale, "إضافة طالب", "Add student")}
-        </Link>
+      <div>
+        <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
+          <GraduationCap size={28} className="text-brand-600" />
+          {t(locale, "الطلاب", "Students")}
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">{t(locale, "رؤية أوضح للطلاب الحاليين وربطهم بأولياء الأمور والكلاسات", "A clearer view of current students and their parent and class relationships")}</p>
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row">
@@ -117,7 +106,6 @@ export default function StudentsPage() {
                   <th className={cn("px-4 py-3 font-semibold text-muted-foreground", isAr ? "text-right" : "text-left")}>{t(locale, "الحالة", "Status")}</th>
                   <th className={cn("px-4 py-3 font-semibold text-muted-foreground", isAr ? "text-right" : "text-left")}>{t(locale, "الكورس", "Course")}</th>
                   <th className={cn("px-4 py-3 font-semibold text-muted-foreground", isAr ? "text-right" : "text-left")}>{t(locale, "الكلاس", "Class")}</th>
-                  <th className={cn("px-4 py-3 font-semibold text-muted-foreground", isAr ? "text-right" : "text-left")}>{t(locale, "المسؤول", "Owner")}</th>
                   <th className={cn("px-4 py-3 font-semibold text-muted-foreground", isAr ? "text-right" : "text-left")}>{t(locale, "الحضور", "Attendance")}</th>
                   <th className={cn("px-4 py-3 font-semibold text-muted-foreground", isAr ? "text-right" : "text-left")}>{t(locale, "المدفوع", "Paid")}</th>
                 </tr>
@@ -126,30 +114,20 @@ export default function StudentsPage() {
                 {filtered.map((student) => {
                   const meta = STUDENT_STATUS_META[student.status];
                   const parent = parentMap.get(student.id);
-                  const projectedLeadId = extractLeadIdFromProjectionId(student.id);
-                  const studentHref = projectedLeadId ? `/leads/${projectedLeadId}` : `/students/${student.id}`;
-                  const parentLeadId = extractLeadIdFromProjectionId(parent?.id ?? null);
-                  const parentHref = parent
-                    ? (parentLeadId ? `/leads/${parentLeadId}` : `/parents/${parent.id}`)
-                    : null;
                   return (
                     <tr key={student.id} className="border-b border-border last:border-0 transition-colors hover:bg-muted/30">
                       <td className="px-4 py-3">
-                        <Link href={studentHref} className="group block">
+                        <Link href={`/students/${student.id}`} className="group block">
                           <p className="font-semibold text-foreground transition-colors group-hover:text-brand-600">{student.fullName}</p>
-                          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                            <span>{student.age > 0 ? `${student.age} ${t(locale, "سنة", "years")}` : t(locale, "العمر غير مكتمل", "Age missing")}</span>
-                            {projectedLeadId ? <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">{t(locale, "من العملاء الحاليين", "From won lead")}</span> : null}
-                          </div>
+                          <p className="text-xs text-muted-foreground">{student.age} {t(locale, "سنة", "years")}</p>
                         </Link>
                       </td>
                       <td className="px-4 py-3 text-foreground">
-                        {parentHref ? <Link href={parentHref} className="transition-colors hover:text-brand-600">{student.parentName}</Link> : student.parentName}
+                        {parent ? <Link href={`/parents/${parent.id}`} className="transition-colors hover:text-brand-600">{student.parentName}</Link> : student.parentName}
                       </td>
                       <td className="px-4 py-3"><span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: meta.bg, color: meta.color }}>{getMetaLabel(meta, locale)}</span></td>
                       <td className="px-4 py-3"><span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs text-brand-700 dark:bg-brand-950 dark:text-brand-300">{formatCourseLabel(student.currentCourse, locale)}</span></td>
                       <td className="px-4 py-3 text-xs text-foreground">{student.className ?? t(locale, "غير مسجل", "Not assigned")}</td>
-                      <td className="px-4 py-3 text-xs text-foreground">{student.ownerName ?? t(locale, "غير مخصص", "Unassigned")}</td>
                       <td className="px-4 py-3 text-foreground">{student.sessionsAttended} {t(locale, "حصة", "sessions")}</td>
                       <td className="px-4 py-3 font-semibold text-foreground">{formatCurrencyEgp(student.totalPaid, locale)}</td>
                     </tr>

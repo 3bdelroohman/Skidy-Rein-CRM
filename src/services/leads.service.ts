@@ -8,9 +8,8 @@ import type {
   LeadListItem,
   UpdateLeadInput,
 } from "@/types/crm";
-import { MOCK_TEAM } from "@/lib/mock-data";
+import { MOCK_LEADS, MOCK_LEAD_ACTIVITIES, MOCK_TEAM } from "@/lib/mock-data";
 import { isBrowser, readStorage, sortByDateDesc, writeStorage } from "@/services/storage";
-import { ensureLeadEnrollment } from "@/services/enrollment.service";
 
 const LEADS_KEY = "skidy.crm.leads";
 const ACTIVITIES_KEY = "skidy.crm.lead-activities";
@@ -46,8 +45,25 @@ function getSupabaseClient() {
   return createBrowserClient<Database>(url, key);
 }
 
+function isDemoModeEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_ALLOW_DEMO_FALLBACK === "true";
+}
+
+function shouldUseDemoFallback(): boolean {
+  return !getSupabaseClient() && isDemoModeEnabled();
+}
+
+function mockLeads(): LeadListItem[] {
+  return MOCK_LEADS.map((lead) => ({ ...lead }));
+}
+
+function mockActivities(): LeadActivityItem[] {
+  return MOCK_LEAD_ACTIVITIES.map((activity) => ({ ...activity }));
+}
+
 function getLocalLeads(): LeadListItem[] {
-  return sortByDateDesc(readStorage(LEADS_KEY, [] as LeadListItem[]), (lead) => lead.createdAt);
+  const seed = shouldUseDemoFallback() ? mockLeads() : ([] as LeadListItem[]);
+  return sortByDateDesc(readStorage(LEADS_KEY, seed), (lead) => lead.createdAt);
 }
 
 function saveLocalLeads(leads: LeadListItem[]): void {
@@ -59,7 +75,8 @@ function clearLocalLeads(): void {
 }
 
 function getLocalActivities(): LeadActivityItem[] {
-  return sortByDateDesc(readStorage(ACTIVITIES_KEY, [] as LeadActivityItem[]), (activity) => activity.date);
+  const seed = shouldUseDemoFallback() ? mockActivities() : ([] as LeadActivityItem[]);
+  return sortByDateDesc(readStorage(ACTIVITIES_KEY, seed), (activity) => activity.date);
 }
 
 function saveLocalActivities(activities: LeadActivityItem[]): void {
@@ -139,10 +156,7 @@ function mapLeadRow(row: Database["public"]["Tables"]["leads"]["Row"] | Record<s
     source: asString(record.source, "other") as LeadListItem["source"],
     suggestedCourse: asNullableString(record.suggested_course ?? record.suggestedCourse) as LeadListItem["suggestedCourse"],
     assignedTo: asString(record.assigned_to ?? record.assignedTo, ""),
-    assignedToName: asString(
-      record.assigned_to_name ?? record.assignedToName,
-      MOCK_TEAM.find((member) => member.id === asString(record.assigned_to ?? record.assignedTo))?.name ?? "غير مخصص",
-    ),
+    assignedToName: asString(record.assigned_to_name ?? record.assignedToName, "غير مخصص"),
     lastContactAt: asNullableString(record.last_contact_at ?? record.lastContactAt),
     nextFollowUpAt: asNullableString(record.next_follow_up_at ?? record.nextFollowUpAt),
     notes: asNullableString(record.notes),
@@ -165,40 +179,6 @@ function mapActivityRow(row: Database["public"]["Tables"]["lead_activities"]["Ro
   };
 }
 
-
-async function enrichAssignedToNames(items: LeadListItem[]): Promise<LeadListItem[]> {
-  const supabase = getSupabaseClient();
-  if (!supabase) return items;
-
-  const missingIds = Array.from(new Set(
-    items
-      .filter((lead) => isUuid(lead.assignedTo) && (!lead.assignedToName || lead.assignedToName === "غير مخصص"))
-      .map((lead) => lead.assignedTo),
-  ));
-
-  if (missingIds.length === 0) return items;
-
-  try {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("id, full_name, full_name_ar")
-      .in("id", missingIds);
-
-    if (error || !data) return items;
-
-    const profileMap = new Map(
-      data.map((row) => [row.id, asString(row.full_name_ar ?? row.full_name, "غير مخصص")]),
-    );
-
-    return items.map((lead) => ({
-      ...lead,
-      assignedToName: profileMap.get(lead.assignedTo) ?? lead.assignedToName,
-    }));
-  } catch {
-    return items;
-  }
-}
-
 async function syncLeadsFromSupabase(): Promise<LeadListItem[] | null> {
   const supabase = getSupabaseClient();
   if (!supabase) return null;
@@ -215,7 +195,7 @@ async function syncLeadsFromSupabase(): Promise<LeadListItem[] | null> {
     return [];
   }
 
-  const mapped = await enrichAssignedToNames(data.map((row: Database["public"]["Tables"]["leads"]["Row"]) => mapLeadRow(row)));
+  const mapped = data.map((row: Database["public"]["Tables"]["leads"]["Row"]) => mapLeadRow(row));
   saveLocalLeads(mapped);
   return mapped;
 }
@@ -250,8 +230,9 @@ async function syncActivitiesFromSupabase(leadId: string): Promise<LeadActivityI
 }
 
 export async function listLeads(): Promise<LeadListItem[]> {
+  const demoFallback = shouldUseDemoFallback() ? getLocalLeads() : [];
   try {
-    return (await syncLeadsFromSupabase()) ?? [];
+    return (await syncLeadsFromSupabase()) ?? demoFallback;
   } catch (error) {
     console.error("[leads] unexpected load failure", error);
     clearLocalLeads();
@@ -269,7 +250,7 @@ export async function getLeadById(id: string): Promise<LeadListItem | null> {
   try {
     const { data, error } = await supabase.from("leads").select("*").eq("id", id).maybeSingle();
     if (error || !data) return null;
-    const [mapped] = await enrichAssignedToNames([mapLeadRow(data)]);
+    const mapped = mapLeadRow(data);
     const next = [mapped, ...getLocalLeads().filter((lead) => lead.id !== id)];
     saveLocalLeads(next);
     return mapped;
@@ -279,8 +260,9 @@ export async function getLeadById(id: string): Promise<LeadListItem | null> {
 }
 
 export async function listLeadActivities(leadId: string): Promise<LeadActivityItem[]> {
+  const demoFallback = shouldUseDemoFallback() ? getLocalActivities().filter((activity) => activity.leadId === leadId) : [];
   try {
-    return (await syncActivitiesFromSupabase(leadId)) ?? [];
+    return (await syncActivitiesFromSupabase(leadId)) ?? demoFallback;
   } catch (error) {
     console.error("[lead_activities] unexpected load failure", error);
     return [];
@@ -314,7 +296,24 @@ export async function createLead(input: CreateLeadInput): Promise<LeadListItem> 
   const supabase = getSupabaseClient();
 
   if (!supabase) {
-    throw new Error("تعذر الاتصال بقاعدة البيانات. أعد المحاولة بعد تسجيل الدخول أو التحقق من الإعدادات.");
+    if (!shouldUseDemoFallback()) {
+      throw new Error("تعذر الاتصال بقاعدة البيانات. أعد المحاولة بعد تسجيل الدخول أو التحقق من الإعدادات.");
+    }
+
+    const current = getLocalLeads();
+    saveLocalLeads([draftLead, ...current]);
+
+    const demoActivity: LeadActivityItem = {
+      id: crypto.randomUUID(),
+      leadId: draftLead.id,
+      action: "تم إنشاء العميل المحتمل",
+      date: createdAt,
+      by: draftLead.assignedToName,
+      type: "create",
+    };
+    saveLocalActivities([demoActivity, ...getLocalActivities()]);
+
+    return draftLead;
   }
 
   try {
@@ -339,7 +338,6 @@ export async function createLead(input: CreateLeadInput): Promise<LeadListItem> 
       price_range_shared: false,
       whatsapp_collected: Boolean((input.parentWhatsapp ?? input.parentPhone).trim()),
       assigned_to: assignedToUuid,
-      assigned_to_name: draftLead.assignedToName,
       notes: draftLead.notes,
       created_at: draftLead.createdAt,
     };
@@ -387,7 +385,8 @@ export async function updateLead(
   input: UpdateLeadInput,
   actorName = input.assignedToName || "النظام",
 ): Promise<LeadListItem | null> {
-  const existing = await getLeadById(leadId);
+  const current = getLocalLeads();
+  const existing = current.find((lead) => lead.id === leadId);
   if (!existing) return null;
 
   const updated: LeadListItem = {
@@ -408,6 +407,8 @@ export async function updateLead(
     lastContactAt: new Date().toISOString(),
   };
 
+  saveLocalLeads(current.map((lead) => (lead.id === leadId ? updated : lead)));
+
   const activity: LeadActivityItem = {
     id: crypto.randomUUID(),
     leadId,
@@ -416,10 +417,12 @@ export async function updateLead(
     by: actorName,
     type: "note",
   };
+  saveLocalActivities([activity, ...getLocalActivities()]);
 
   const supabase = getSupabaseClient();
   if (!supabase) {
-    throw new Error("تعذر الاتصال بقاعدة البيانات. تأكد من إعدادات Supabase ثم أعد المحاولة.");
+    if (shouldUseDemoFallback()) return updated;
+    throw new Error("Supabase client is not available");
   }
 
   try {
@@ -428,7 +431,7 @@ export async function updateLead(
       throw new Error("تعذر تحديد المسؤول الصحيح عن العميل.");
     }
 
-    const { data, error: updateError } = await supabase
+    const { error: updateError } = await supabase
       .from("leads")
       .update({
         parent_name: updated.parentName,
@@ -440,43 +443,34 @@ export async function updateLead(
         source: updated.source as Database["public"]["Enums"]["lead_source"],
         suggested_course: updated.suggestedCourse as Database["public"]["Enums"]["course_type"] | null,
         assigned_to: assignedToUuid,
-        assigned_to_name: updated.assignedToName,
         notes: updated.notes,
         loss_reason: updated.lossReason,
         next_follow_up_at: updated.nextFollowUpAt,
         last_contact_at: updated.lastContactAt,
-        updated_at: new Date().toISOString(),
       })
-      .eq("id", leadId)
-      .select("*")
-      .single();
+      .eq("id", leadId);
 
-    if (updateError || !data) {
-      throw updateError ?? new Error("تعذر تحديث العميل.");
+    if (updateError) {
+      throw updateError;
     }
-
-    const synced = { ...mapLeadRow(data), assignedToName: updated.assignedToName };
-    saveLocalLeads([synced, ...getLocalLeads().filter((lead) => lead.id !== leadId)]);
 
     const { error: activityError } = await supabase.from("lead_activities").insert({
       lead_id: leadId,
       action: activity.action,
       type: activity.type,
-      by_name: activity.by,
       created_at: activity.date,
     });
 
     if (activityError) {
       console.warn("[lead_activities] update activity failed", activityError);
-    } else {
-      saveLocalActivities([activity, ...getLocalActivities().filter((item) => item.id !== activity.id)]);
     }
-
-    return synced;
   } catch (error) {
     console.error("[leads] update failed", error);
+    if (shouldUseDemoFallback()) return updated;
     throw error instanceof Error ? error : new Error("Failed to update lead");
   }
+
+  return updated;
 }
 
 export async function updateLeadStage(
@@ -484,71 +478,54 @@ export async function updateLeadStage(
   stage: LeadStage,
   actorName: string,
 ): Promise<LeadListItem | null> {
-  const existing = await getLeadById(leadId);
+  const current = getLocalLeads();
+  const existing = current.find((lead) => lead.id === leadId);
   if (!existing) return null;
 
-  const updatedAt = new Date().toISOString();
   const updated: LeadListItem = {
     ...existing,
     stage,
-    lastContactAt: updatedAt,
+    lastContactAt: new Date().toISOString(),
   };
+
+  saveLocalLeads(current.map((lead) => (lead.id === leadId ? updated : lead)));
 
   const activity: LeadActivityItem = {
     id: crypto.randomUUID(),
     leadId,
     action: `تم نقل المرحلة إلى ${STAGE_LABELS[stage]}`,
-    date: updatedAt,
+    date: new Date().toISOString(),
     by: actorName,
     type: "stage",
   };
+  saveLocalActivities([activity, ...getLocalActivities()]);
 
   const supabase = getSupabaseClient();
   if (!supabase) {
-    throw new Error("تعذر الاتصال بقاعدة البيانات. تأكد من إعدادات Supabase ثم أعد المحاولة.");
+    if (shouldUseDemoFallback()) return updated;
+    throw new Error("Supabase client is not available");
   }
 
   try {
-    if (stage === "won") {
-      await ensureLeadEnrollment(leadId);
-    }
-
-    const { data, error } = await supabase
+    await supabase
       .from("leads")
       .update({
         stage,
         last_contact_at: updated.lastContactAt,
-        won_at: stage === "won" ? updatedAt : null,
-        lost_at: stage === "lost" ? updatedAt : null,
-        updated_at: updatedAt,
       })
-      .eq("id", leadId)
-      .select("*")
-      .single();
+      .eq("id", leadId);
 
-    if (error || !data) {
-      throw error ?? new Error("تعذر تحديث مرحلة العميل.");
-    }
-
-    const { error: activityError } = await supabase.from("lead_activities").insert({
+    await supabase.from("lead_activities").insert({
       lead_id: leadId,
       action: activity.action,
       type: activity.type,
-      by_name: activity.by,
       created_at: activity.date,
     });
-
-    if (activityError) {
-      console.warn("[lead_activities] stage activity failed", activityError);
-    } else {
-      saveLocalActivities([activity, ...getLocalActivities().filter((item) => item.id !== activity.id)]);
-    }
-
-    const synced = { ...mapLeadRow(data), assignedToName: existing.assignedToName };
-    saveLocalLeads([synced, ...getLocalLeads().filter((lead) => lead.id !== leadId)]);
-    return synced;
   } catch (error) {
     console.error("[leads] stage update failed", error);
+    if (shouldUseDemoFallback()) return updated;
     throw error instanceof Error ? error : new Error("Failed to update lead stage");
   }
+
+  return updated;
 }

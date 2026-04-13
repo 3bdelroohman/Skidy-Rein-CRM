@@ -488,7 +488,7 @@ export async function archivePayment(id: string, archivedBy?: string | null): Pr
   return nextItem;
 }
 
-export async function restorePayment(id: string): Promise<PaymentItem | null> {
+export async function restoreArchivedPayment(id: string): Promise<PaymentItem | null> {
   const current = await listPayments({ includeArchived: true });
   const existing = current.find((payment) => payment.id === id) ?? null;
   if (!existing) return null;
@@ -522,8 +522,6 @@ export async function restorePayment(id: string): Promise<PaymentItem | null> {
 
   return nextItem;
 }
-
-export const restoreArchivedPayment = restorePayment;
 
 export async function deletePayment(id: string): Promise<boolean> {
   const supabase = assertSupabaseConfigured();

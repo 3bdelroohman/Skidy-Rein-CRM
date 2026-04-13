@@ -2,18 +2,12 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, CalendarDays, CalendarPlus, ClipboardList, FileText, GraduationCap, MessageCircle, ReceiptText, RefreshCcw, Save, Unlink2, UserCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarDays, GraduationCap, MessageCircle, Phone, UserCircle } from "lucide-react";
 import { useUIStore } from "@/stores/ui-store";
 import { STUDENT_STATUS_META, getMetaLabel } from "@/config/status-meta";
-import { getCourseFormLabel, getCourseTracks } from "@/config/course-roadmap";
-import { t } from "@/lib/locale";
+import { getCourseLabel, t } from "@/lib/locale";
 import { formatCurrencyEgp, formatDate } from "@/lib/formatters";
-import { extractLeadIdFromProjectionId, getStudentDetails } from "@/services/relations.service";
-import { buildStudentJourney } from "@/services/student-journey.service";
-import { buildStudentReportSnapshot } from "@/services/student-report.service";
-import { getStudentFinanceSnapshot, type StudentFinanceSnapshot } from "@/services/student-finance.service";
-import { getEnrollmentOptionLabel, listEnrollmentClassOptions, updateStudentEnrollment, type EnrollmentClassOption } from "@/services/student-enrollment-control.service";
-import { toast } from "sonner";
+import { getStudentDetails } from "@/services/relations.service";
 import { LoadingState, PageStateCard } from "@/components/shared/page-state";
 import type { StudentDetails } from "@/types/crm";
 
@@ -22,43 +16,16 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
   const locale = useUIStore((state) => state.locale);
   const isAr = locale === "ar";
   const [student, setStudent] = useState<StudentDetails | null>(null);
-  const [finance, setFinance] = useState<StudentFinanceSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
-  const [options, setOptions] = useState<EnrollmentClassOption[]>([]);
-  const [selectedOptionKey, setSelectedOptionKey] = useState("");
-  const [savingEnrollment, setSavingEnrollment] = useState(false);
-
-  const loadPage = async () => {
-    const [studentData, financeData] = await Promise.all([getStudentDetails(id), getStudentFinanceSnapshot(id)]);
-    setStudent(studentData);
-    setFinance(financeData);
-    const preferredCourse = studentData?.currentCourse ?? null;
-    const optionItems = await listEnrollmentClassOptions(preferredCourse);
-    setOptions(optionItems);
-    const matched = studentData?.className
-      ? optionItems.find((item) => item.className === studentData.className && (!studentData.currentCourse || item.course === studentData.currentCourse))
-      : null;
-    setSelectedOptionKey(matched?.key ?? "");
-    setLoading(false);
-  };
 
   useEffect(() => {
     let mounted = true;
-    (async () => {
-      const [studentData, financeData] = await Promise.all([getStudentDetails(id), getStudentFinanceSnapshot(id)]);
-      if (!mounted) return;
-      setStudent(studentData);
-      setFinance(financeData);
-      const preferredCourse = studentData?.currentCourse ?? null;
-      const optionItems = await listEnrollmentClassOptions(preferredCourse);
-      if (!mounted) return;
-      setOptions(optionItems);
-      const matched = studentData?.className
-        ? optionItems.find((item) => item.className === studentData.className && (!studentData.currentCourse || item.course === studentData.currentCourse))
-        : null;
-      setSelectedOptionKey(matched?.key ?? "");
-      setLoading(false);
-    })();
+    getStudentDetails(id).then((data) => {
+      if (mounted) {
+        setStudent(data);
+        setLoading(false);
+      }
+    });
     return () => {
       mounted = false;
     };
@@ -69,8 +36,8 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
       <LoadingState
         titleAr="جارِ تحميل ملف الطالب"
         titleEn="Loading student profile"
-        descriptionAr="يتم الآن تجهيز الربط بين الطالب وولي الأمر والمدرسين والجلسات والمدفوعات المرتبطة."
-        descriptionEn="Linking the student with the parent, teachers, sessions, and payments now."
+        descriptionAr="يتم الآن تجهيز الربط بين الطالب وولي الأمر والمدرسين والجلسات المرتبطة."
+        descriptionEn="Linking the student with the parent, teachers, and related sessions now."
       />
     );
   }
@@ -91,46 +58,6 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
   }
 
   const status = STUDENT_STATUS_META[student.status];
-  const courseTracks = student.currentCourse ? getCourseTracks(student.currentCourse, locale) : [];
-  const journey = buildStudentJourney(student);
-  const report = buildStudentReportSnapshot(student);
-  const primaryTeacher = student.teachers[0] ?? null;
-  const linkedClassName = report.className ?? student.className ?? t(locale, "غير مسجل", "Not assigned");
-  const financeState = getFinanceStateLabel(finance?.currentState ?? "none", locale);
-  const nextDueDate = finance?.nextPendingPayment ? formatDate(finance.nextPendingPayment.dueDate, locale) : t(locale, "لا يوجد", "None");
-  const nextAmount = finance?.nextPendingPayment ? formatCurrencyEgp(finance.nextPendingPayment.amount, locale) : t(locale, "لا يوجد", "None");
-  const scheduleHref = `/schedule/new?className=${encodeURIComponent(linkedClassName)}${student.currentCourse ? `&course=${student.currentCourse}` : ""}${primaryTeacher ? `&teacherId=${primaryTeacher.id}` : ""}`;
-  const sourceLeadId = extractLeadIdFromProjectionId(student.id);
-  const selectedOption = options.find((item) => item.key === selectedOptionKey) ?? null;
-  const isProjectedRecord = Boolean(sourceLeadId);
-
-  async function handleSaveEnrollment() {
-    if (!student || !selectedOption) return;
-    setSavingEnrollment(true);
-    try {
-      await updateStudentEnrollment(student.id, { className: selectedOption.className, currentCourse: selectedOption.course });
-      toast.success(t(locale, "تم تحديث ربط الطالب بالكلاس", "Student enrollment link updated"));
-      await loadPage();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : t(locale, "تعذر تحديث ربط الطالب", "Failed to update enrollment"));
-    } finally {
-      setSavingEnrollment(false);
-    }
-  }
-
-  async function handleClearEnrollment() {
-    if (!student) return;
-    setSavingEnrollment(true);
-    try {
-      await updateStudentEnrollment(student.id, { className: null, currentCourse: student.currentCourse ?? null });
-      toast.success(t(locale, "تم فك ربط الطالب من الكلاس", "Student unlinked from class"));
-      await loadPage();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : t(locale, "تعذر فك ربط الطالب", "Failed to unlink class"));
-    } finally {
-      setSavingEnrollment(false);
-    }
-  }
 
   return (
     <div className="space-y-6">
@@ -141,7 +68,6 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
         <div>
           <h1 className="text-2xl font-bold text-foreground">{student.fullName}</h1>
           <p className="text-sm text-muted-foreground">{student.parentName} — {student.parentPhone}</p>
-          <p className="text-xs text-muted-foreground">{t(locale, "المسؤول", "Owner")}: {student.ownerName ?? t(locale, "غير مخصص", "Unassigned")}</p>
         </div>
       </div>
 
@@ -155,26 +81,12 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Info label={t(locale, "العمر", "Age")} value={`${student.age} ${t(locale, "سنة", "years")}`} />
             <Info label={t(locale, "الحالة", "Status")} value={getMetaLabel(status, locale)} />
-            <Info label={t(locale, "الكورس الحالي", "Current course")} value={student.currentCourse ? getCourseFormLabel(student.currentCourse, locale) : t(locale, "غير محدد", "Not set")} />
-            <Info label={t(locale, "الكلاس", "Class")} value={linkedClassName} />
+            <Info label={t(locale, "الكورس الحالي", "Current course")} value={student.currentCourse ? getCourseLabel(student.currentCourse, locale) : t(locale, "غير محدد", "Not set")} />
+            <Info label={t(locale, "الكلاس", "Class")} value={student.className ?? t(locale, "غير مسجل", "Not assigned")} />
             <Info label={t(locale, "تاريخ الالتحاق", "Enrollment date")} value={formatDate(student.enrollmentDate, locale)} />
             <Info label={t(locale, "عدد الحصص", "Sessions attended")} value={student.sessionsAttended.toString()} />
             <Info label={t(locale, "إجمالي المدفوع", "Total paid")} value={formatCurrencyEgp(student.totalPaid, locale)} />
-            <Info label={t(locale, "المدرس الحالي", "Current teacher")} value={report.teacherName ?? t(locale, "غير مرتبط بعد", "Not linked yet")} />
-            <Info label={t(locale, "المسؤول", "Owner")} value={student.ownerName ?? t(locale, "غير مخصص", "Unassigned")} />
           </div>
-          {courseTracks.length > 0 ? (
-            <div className="mt-4 border-t border-border pt-4">
-              <p className="mb-2 text-xs text-muted-foreground">{t(locale, "المسارات المرتبطة", "Mapped tracks")}</p>
-              <div className="flex flex-wrap gap-2">
-                {courseTracks.map((track) => (
-                  <span key={track} className="rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 dark:bg-brand-950 dark:text-brand-300">
-                    {track}
-                  </span>
-                ))}
-              </div>
-            </div>
-          ) : null}
         </div>
 
         <div className="space-y-4">
@@ -191,152 +103,27 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
                   {t(locale, "فتح ملف ولي الأمر", "Open parent profile")}
                 </Link>
               ) : null}
-              <Link href={`/students/${student.id}/report`} className="rounded-xl border border-brand-200 px-3 py-2 text-xs font-semibold text-brand-700 transition-colors hover:bg-brand-50 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950">
-                {t(locale, "عرض التقرير الشهري", "Open monthly report")}
-              </Link>
+              <a href={`tel:${student.parentPhone}`} className="rounded-xl border border-border px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted">
+                {t(locale, "اتصال", "Call")}
+              </a>
+              <a href={`https://wa.me/2${student.parentPhone.replace(/\D/g, "")}`} target="_blank" rel="noreferrer" className="rounded-xl border border-border px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted">
+                {t(locale, "واتساب", "WhatsApp")}
+              </a>
             </div>
           </div>
 
           <div className="rounded-2xl border border-border bg-card p-5">
-            <h3 className="mb-3 flex items-center gap-2 font-bold text-foreground"><ReceiptText size={18} className="text-brand-600" />{t(locale, "الملف المالي", "Finance snapshot")}</h3>
-            <div className="space-y-3">
-              <Info label={t(locale, "الحالة الحالية", "Current state")} value={financeState} />
-              <Info label={t(locale, "الفاتورة القادمة", "Next due invoice")} value={nextDueDate} />
-              <Info label={t(locale, "المبلغ القادم", "Next amount")} value={nextAmount} />
-              <Info label={t(locale, "عدد الفواتير", "Invoices")} value={String(finance?.invoiceCount ?? 0)} />
-              <Info label={t(locale, "إجمالي المفوتر", "Total billed")} value={formatCurrencyEgp(finance?.totalBilled ?? 0, locale)} />
-            </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Link href={`/payments/new?studentId=${student.id}`} className="rounded-xl bg-brand-600 px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90">
-                {t(locale, "إضافة دفعة لهذا الطالب", "Add payment for this student")}
-              </Link>
-              <Link href="/payments" className="rounded-xl border border-border px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted">
-                {t(locale, "فتح المدفوعات", "Open payments")}
-              </Link>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-border bg-card p-5">
-            <h3 className="mb-3 flex items-center gap-2 font-bold text-foreground"><CalendarPlus size={18} className="text-brand-600" />{t(locale, "إجراءات سريعة", "Quick actions")}</h3>
+            <h3 className="mb-3 flex items-center gap-2 font-bold text-foreground"><MessageCircle size={18} className="text-brand-600" />{t(locale, "المدرسون المرتبطون", "Linked teachers")}</h3>
             <div className="flex flex-wrap gap-2">
-              <Link href={scheduleHref} className="rounded-xl border border-border px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted">
-                {t(locale, "إضافة حصة مرتبطة", "Add linked session")}
-              </Link>
-              {primaryTeacher ? (
-                <Link href={`/teachers/${primaryTeacher.id}`} className="rounded-xl border border-border px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted">
-                  {t(locale, "فتح ملف المدرس", "Open teacher profile")}
-                </Link>
-              ) : null}
-              {sourceLeadId ? (
-                <Link href={`/leads/${sourceLeadId}`} className="rounded-xl border border-border px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted">
-                  {t(locale, "فتح العميل الأصلي", "Open source lead")}
-                </Link>
-              ) : null}
-            </div>
-          </div>
-          <div className="rounded-2xl border border-border bg-card p-5">
-            <h3 className="mb-3 flex items-center gap-2 font-bold text-foreground"><RefreshCcw size={18} className="text-brand-600" />{t(locale, "إدارة الكلاس والالتحاق", "Class & enrollment control")}</h3>
-            {isProjectedRecord ? (
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">{t(locale, "هذا السجل معروض من العملاء الحاليين. أنشئ ملف طالب فعلي أولًا ثم اربطه بكلاس ثابت.", "This record is projected from current customers. Create a real student profile first, then link it to a fixed class.")}</p>
-                <Link href={`/students/new?childName=${encodeURIComponent(student.fullName)}&childAge=${student.age}&parentName=${encodeURIComponent(student.parentName)}&parentPhone=${encodeURIComponent(student.parentPhone)}${student.currentCourse ? `&currentCourse=${student.currentCourse}` : ""}${student.className ? `&className=${encodeURIComponent(student.className)}` : ""}`} className="inline-flex rounded-xl bg-brand-600 px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90">
-                  {t(locale, "إنشاء ملف طالب فعلي", "Create real student record")}
-                </Link>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <select
-                  value={selectedOptionKey}
-                  onChange={(event) => setSelectedOptionKey(event.target.value)}
-                  className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground focus:border-transparent focus:ring-2 focus:ring-ring"
-                >
-                  <option value="">{t(locale, "اختر كلاسًا مرتبطًا", "Choose a linked class")}</option>
-                  {options.map((option) => (
-                    <option key={option.key} value={option.key}>
-                      {getEnrollmentOptionLabel(option, locale)}
-                    </option>
-                  ))}
-                </select>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={handleSaveEnrollment}
-                    disabled={!selectedOption || savingEnrollment}
-                    className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <Save size={14} />
-                    {savingEnrollment ? t(locale, "جارِ الحفظ...", "Saving...") : t(locale, "حفظ الكلاس الحالي", "Save current class")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleClearEnrollment}
-                    disabled={savingEnrollment || !student.className}
-                    className="inline-flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <Unlink2 size={14} />
-                    {t(locale, "فك الربط", "Unlink class")}
-                  </button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {selectedOption ? t(locale, `سيتم ربط الطالب بكلاس ${selectedOption.className} مع ${selectedOption.teacherName}.`, `The student will be linked to ${selectedOption.className} with ${selectedOption.teacherName}.`) : t(locale, "اختر كلاسًا لنقل الطالب أو تثبيت ربطه الحالي.", "Pick a class to transfer or stabilize the current enrollment link.")}
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <div className="rounded-2xl border border-border bg-card p-5 xl:col-span-2">
-          <h3 className="mb-4 font-bold text-foreground">{t(locale, "رحلة الطالب", "Student journey")}</h3>
-          <div className="mb-4 rounded-2xl bg-brand-50 p-4 dark:bg-brand-950/40">
-            <p className="text-xs text-muted-foreground">{t(locale, "المرحلة الحالية", "Current stage")}</p>
-            <p className="mt-1 text-base font-bold text-foreground">{locale === "ar" ? journey.stageAr : journey.stageEn}</p>
-            <p className="mt-2 text-xs text-muted-foreground">
-              {journey.reportReady ? t(locale, "يمكن لاحقًا استخراج تقرير ولي الأمر من هذه الرحلة.", "Parent reporting can later be generated from this journey.") : t(locale, "سيصبح التقرير الشهري منطقيًا بعد إكمال 4 حصص على الأقل.", "The monthly report becomes meaningful after at least 4 sessions.")}
-            </p>
-          </div>
-          <div className="space-y-3">
-            {journey.milestones.map((item) => (
-              <div key={item.id} className="rounded-2xl border border-border bg-background p-4">
-                <p className="text-sm font-semibold text-foreground">{locale === "ar" ? item.titleAr : item.titleEn}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{locale === "ar" ? item.detailAr : item.detailEn}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <div className="rounded-2xl border border-border bg-card p-5">
-            <h3 className="mb-3 flex items-center gap-2 font-bold text-foreground"><MessageCircle size={18} className="text-brand-600" />{t(locale, "المدرس الحالي", "Current teacher")}</h3>
-            {primaryTeacher ? (
-              <div className="space-y-3">
-                <Info label={t(locale, "الاسم", "Name")} value={primaryTeacher.fullName} />
-                <Info label={t(locale, "الهاتف", "Phone")} value={primaryTeacher.phone} />
-                <Info label={t(locale, "الكلاس المرتبط", "Linked class")} value={linkedClassName} />
-                <Info label={t(locale, "التخصص", "Specialization")} value={primaryTeacher.specialization.map((item) => getCourseFormLabel(item, locale)).join(" • ")} />
-                <Link href={`/teachers/${primaryTeacher.id}`} className="inline-flex rounded-xl bg-brand-600 px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90">
-                  {t(locale, "فتح ملف المدرس", "Open teacher profile")}
-                </Link>
-              </div>
-            ) : (
-              <EmptyCopy locale={locale} ar="لم يتم ربط مدرس أساسي بهذا الطالب بعد" en="No primary teacher has been linked to this student yet" />
-            )}
-          </div>
-
-          <div className="rounded-2xl border border-border bg-card p-5">
-            <h3 className="mb-3 flex items-center gap-2 font-bold text-foreground"><ClipboardList size={18} className="text-brand-600" />{t(locale, "مصدر التقرير القادم", "Next report source")}</h3>
-            <div className="space-y-3">
-              <Info label={t(locale, "آخر نقطة مكتملة", "Last completed checkpoint")} value={report.currentCheckpoint > 0 ? `${report.currentCheckpoint}` : t(locale, "لم يكتمل بعد", "Not completed yet")} />
-              <Info label={t(locale, "النقطة القادمة", "Next checkpoint")} value={`${report.nextCheckpoint} ${t(locale, "حصص", "sessions")}`} />
-              <Info label={t(locale, "المتبقي", "Remaining")} value={`${report.sessionsUntilNext} ${t(locale, "حصص", "sessions")}`} />
-              <div className="rounded-xl bg-muted/40 p-3">
-                <p className="text-xs text-muted-foreground">{t(locale, "التقدم داخل الدورة الحالية", "Progress inside current cycle")}</p>
-                <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-muted">
-                  <div className="h-full rounded-full bg-brand-600 transition-all" style={{ width: `${report.progressPercent}%` }} />
-                </div>
-                <p className="mt-2 text-xs font-medium text-foreground">{report.progressPercent}%</p>
-              </div>
+              {student.teachers.length === 0 ? (
+                <span className="text-sm text-muted-foreground">{t(locale, "لا يوجد مدرس مرتبط بعد", "No linked teacher yet")}</span>
+              ) : (
+                student.teachers.map((teacher) => (
+                  <Link key={teacher.id} href={`/teachers/${teacher.id}`} className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700 dark:bg-brand-950 dark:text-brand-300">
+                    {teacher.fullName}
+                  </Link>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -354,9 +141,9 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="font-semibold text-foreground">{session.className}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">{session.teacher} • {session.startTime} → {session.endTime}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{session.startTime} → {session.endTime}</p>
                     </div>
-                    <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] text-muted-foreground">{getCourseFormLabel(session.course, locale)}</span>
+                    <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] text-muted-foreground">{getCourseLabel(session.course, locale)}</span>
                   </div>
                 </Link>
               ))}
@@ -395,18 +182,4 @@ function Info({ label, value }: { label: string; value: string }) {
 
 function EmptyCopy({ locale, ar, en }: { locale: "ar" | "en"; ar: string; en: string }) {
   return <div className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">{t(locale, ar, en)}</div>;
-}
-
-function getFinanceStateLabel(state: StudentFinanceSnapshot["currentState"], locale: "ar" | "en"): string {
-  const labels = {
-    paid: { ar: "مدفوع", en: "Paid" },
-    pending: { ar: "قيد الانتظار", en: "Pending" },
-    overdue: { ar: "متأخر", en: "Overdue" },
-    partial: { ar: "دفع جزئي", en: "Partial" },
-    refunded: { ar: "مسترد", en: "Refunded" },
-    deferred: { ar: "مؤجل", en: "Deferred" },
-    none: { ar: "لا توجد فواتير بعد", en: "No invoices yet" },
-  } as const;
-
-  return locale === "ar" ? labels[state].ar : labels[state].en;
 }
