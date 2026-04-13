@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, CalendarDays, CalendarPlus, ClipboardList, FileText, GraduationCap, MessageCircle, ReceiptText, UserCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarDays, CalendarPlus, ClipboardList, FileText, GraduationCap, MessageCircle, ReceiptText, RefreshCcw, Save, Unlink2, UserCircle } from "lucide-react";
 import { useUIStore } from "@/stores/ui-store";
 import { STUDENT_STATUS_META, getMetaLabel } from "@/config/status-meta";
 import { getCourseFormLabel, getCourseTracks } from "@/config/course-roadmap";
@@ -12,6 +12,8 @@ import { extractLeadIdFromProjectionId, getStudentDetails } from "@/services/rel
 import { buildStudentJourney } from "@/services/student-journey.service";
 import { buildStudentReportSnapshot } from "@/services/student-report.service";
 import { getStudentFinanceSnapshot, type StudentFinanceSnapshot } from "@/services/student-finance.service";
+import { getEnrollmentOptionLabel, listEnrollmentClassOptions, updateStudentEnrollment, type EnrollmentClassOption } from "@/services/student-enrollment-control.service";
+import { toast } from "sonner";
 import { LoadingState, PageStateCard } from "@/components/shared/page-state";
 import type { StudentDetails } from "@/types/crm";
 
@@ -22,16 +24,41 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
   const [student, setStudent] = useState<StudentDetails | null>(null);
   const [finance, setFinance] = useState<StudentFinanceSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
+  const [options, setOptions] = useState<EnrollmentClassOption[]>([]);
+  const [selectedOptionKey, setSelectedOptionKey] = useState("");
+  const [savingEnrollment, setSavingEnrollment] = useState(false);
+
+  const loadPage = async () => {
+    const [studentData, financeData] = await Promise.all([getStudentDetails(id), getStudentFinanceSnapshot(id)]);
+    setStudent(studentData);
+    setFinance(financeData);
+    const preferredCourse = studentData?.currentCourse ?? null;
+    const optionItems = await listEnrollmentClassOptions(preferredCourse);
+    setOptions(optionItems);
+    const matched = studentData?.className
+      ? optionItems.find((item) => item.className === studentData.className && (!studentData.currentCourse || item.course === studentData.currentCourse))
+      : null;
+    setSelectedOptionKey(matched?.key ?? "");
+    setLoading(false);
+  };
 
   useEffect(() => {
     let mounted = true;
-    Promise.all([getStudentDetails(id), getStudentFinanceSnapshot(id)]).then(([studentData, financeData]) => {
-      if (mounted) {
-        setStudent(studentData);
-        setFinance(financeData);
-        setLoading(false);
-      }
-    });
+    (async () => {
+      const [studentData, financeData] = await Promise.all([getStudentDetails(id), getStudentFinanceSnapshot(id)]);
+      if (!mounted) return;
+      setStudent(studentData);
+      setFinance(financeData);
+      const preferredCourse = studentData?.currentCourse ?? null;
+      const optionItems = await listEnrollmentClassOptions(preferredCourse);
+      if (!mounted) return;
+      setOptions(optionItems);
+      const matched = studentData?.className
+        ? optionItems.find((item) => item.className === studentData.className && (!studentData.currentCourse || item.course === studentData.currentCourse))
+        : null;
+      setSelectedOptionKey(matched?.key ?? "");
+      setLoading(false);
+    })();
     return () => {
       mounted = false;
     };
@@ -74,6 +101,36 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
   const nextAmount = finance?.nextPendingPayment ? formatCurrencyEgp(finance.nextPendingPayment.amount, locale) : t(locale, "لا يوجد", "None");
   const scheduleHref = `/schedule/new?className=${encodeURIComponent(linkedClassName)}${student.currentCourse ? `&course=${student.currentCourse}` : ""}${primaryTeacher ? `&teacherId=${primaryTeacher.id}` : ""}`;
   const sourceLeadId = extractLeadIdFromProjectionId(student.id);
+  const selectedOption = options.find((item) => item.key === selectedOptionKey) ?? null;
+  const isProjectedRecord = Boolean(sourceLeadId);
+
+  async function handleSaveEnrollment() {
+    if (!student || !selectedOption) return;
+    setSavingEnrollment(true);
+    try {
+      await updateStudentEnrollment(student.id, { className: selectedOption.className, currentCourse: selectedOption.course });
+      toast.success(t(locale, "تم تحديث ربط الطالب بالكلاس", "Student enrollment link updated"));
+      await loadPage();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t(locale, "تعذر تحديث ربط الطالب", "Failed to update enrollment"));
+    } finally {
+      setSavingEnrollment(false);
+    }
+  }
+
+  async function handleClearEnrollment() {
+    if (!student) return;
+    setSavingEnrollment(true);
+    try {
+      await updateStudentEnrollment(student.id, { className: null, currentCourse: student.currentCourse ?? null });
+      toast.success(t(locale, "تم فك ربط الطالب من الكلاس", "Student unlinked from class"));
+      await loadPage();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t(locale, "تعذر فك ربط الطالب", "Failed to unlink class"));
+    } finally {
+      setSavingEnrollment(false);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -176,6 +233,55 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
                 </Link>
               ) : null}
             </div>
+          </div>
+          <div className="rounded-2xl border border-border bg-card p-5">
+            <h3 className="mb-3 flex items-center gap-2 font-bold text-foreground"><RefreshCcw size={18} className="text-brand-600" />{t(locale, "إدارة الكلاس والالتحاق", "Class & enrollment control")}</h3>
+            {isProjectedRecord ? (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">{t(locale, "هذا السجل معروض من العملاء الحاليين. أنشئ ملف طالب فعلي أولًا ثم اربطه بكلاس ثابت.", "This record is projected from current customers. Create a real student profile first, then link it to a fixed class.")}</p>
+                <Link href={`/students/new?childName=${encodeURIComponent(student.fullName)}&childAge=${student.age}&parentName=${encodeURIComponent(student.parentName)}&parentPhone=${encodeURIComponent(student.parentPhone)}${student.currentCourse ? `&currentCourse=${student.currentCourse}` : ""}${student.className ? `&className=${encodeURIComponent(student.className)}` : ""}`} className="inline-flex rounded-xl bg-brand-600 px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90">
+                  {t(locale, "إنشاء ملف طالب فعلي", "Create real student record")}
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <select
+                  value={selectedOptionKey}
+                  onChange={(event) => setSelectedOptionKey(event.target.value)}
+                  className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground focus:border-transparent focus:ring-2 focus:ring-ring"
+                >
+                  <option value="">{t(locale, "اختر كلاسًا مرتبطًا", "Choose a linked class")}</option>
+                  {options.map((option) => (
+                    <option key={option.key} value={option.key}>
+                      {getEnrollmentOptionLabel(option, locale)}
+                    </option>
+                  ))}
+                </select>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSaveEnrollment}
+                    disabled={!selectedOption || savingEnrollment}
+                    className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <Save size={14} />
+                    {savingEnrollment ? t(locale, "جارِ الحفظ...", "Saving...") : t(locale, "حفظ الكلاس الحالي", "Save current class")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleClearEnrollment}
+                    disabled={savingEnrollment || !student.className}
+                    className="inline-flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <Unlink2 size={14} />
+                    {t(locale, "فك الربط", "Unlink class")}
+                  </button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {selectedOption ? t(locale, `سيتم ربط الطالب بكلاس ${selectedOption.className} مع ${selectedOption.teacherName}.`, `The student will be linked to ${selectedOption.className} with ${selectedOption.teacherName}.`) : t(locale, "اختر كلاسًا لنقل الطالب أو تثبيت ربطه الحالي.", "Pick a class to transfer or stabilize the current enrollment link.")}
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>
