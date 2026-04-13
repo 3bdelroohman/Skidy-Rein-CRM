@@ -220,7 +220,7 @@ export function GlobalSearch({ open, onClose }: GlobalSearchProps) {
 
               <ResultSection title={t(locale, "المدرسون", "Teachers")} count={filtered.teacherResults.length}>
                 {filtered.teacherResults.map((item) => (
-                  <ResultLink key={item.id} href={`/teachers/${item.id}`} title={item.fullName} subtitle={item.email} meta={`${item.classesCount} ${t(locale, "كلاس", "classes")}`} icon={Users} onSelect={onClose} />
+                  <ResultLink key={item.id} href={`/teachers/${item.id}`} title={item.fullName} subtitle={item.email ?? item.phone ?? t(locale, "غير متوفر", "N/A")} meta={`${item.classesCount} ${t(locale, "كلاس", "classes")}`} icon={Users} onSelect={onClose} />
                 ))}
               </ResultSection>
 

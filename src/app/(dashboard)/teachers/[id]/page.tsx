@@ -98,7 +98,7 @@ export default function TeacherDetailsPage({ params }: { params: Promise<{ id: s
           <h3 className="mb-3 flex items-center gap-2 font-bold text-foreground"><Users size={18} className="text-brand-600" />{t(locale, "بيانات التواصل", "Contact details")}</h3>
           <div className="space-y-3">
             <Info icon={Phone} label={t(locale, "الهاتف", "Phone")} value={teacher.phone} href={`tel:${teacher.phone}`} />
-            <Info icon={Mail} label={t(locale, "البريد", "Email")} value={teacher.email} href={`mailto:${teacher.email}`} />
+            <Info icon={Mail} label={t(locale, "البريد", "Email")} value={teacher.email ?? t(locale, "غير متوفر", "N/A")} href={teacher.email ? `mailto:${teacher.email}` : undefined} />
             <Info icon={BookOpen} label={t(locale, "الحالة", "Status")} value={teacher.isActive ? t(locale, "نشط", "Active") : t(locale, "غير نشط", "Inactive")} />
           </div>
         </div>
