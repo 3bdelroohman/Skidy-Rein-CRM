@@ -3,18 +3,19 @@
 import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, FileText, Phone, RefreshCcw, Save, Star, Trash2, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, FileText, Phone, RefreshCcw, Save, Star, Trash2, Users, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { useUIStore } from "@/stores/ui-store";
-import { formatCourseLabel } from "@/lib/formatters";
+import { formatCourseLabel, formatCurrencyEgp } from "@/lib/formatters";
 import { buildStudentReportSnapshot } from "@/services/student-report.service";
 import { getEmploymentTypeLabel, t } from "@/lib/locale";
 import { getTeacherDetails } from "@/services/relations.service";
 import { saveTeacherEvaluation } from "@/services/teacher-evaluations.service";
+import { computeTeacherFinanceSummary, getTeacherFinanceConfig, saveTeacherFinanceConfig } from "@/services/teacher-finance.service";
 import { deleteTeacher, listTeachers } from "@/services/teachers.service";
 import { reassignTeacherRelations } from "@/services/teacher-reassignment.service";
 import { LoadingState, PageStateCard } from "@/components/shared/page-state";
-import type { TeacherDetails, TeacherListItem } from "@/types/crm";
+import type { CourseType, TeacherDetails, TeacherListItem } from "@/types/crm";
 
 type TeacherLinkedStudentForReport = TeacherDetails["linkedStudents"][number] & {
   teachers?: { fullName: string }[];
@@ -30,6 +31,11 @@ export default function TeacherDetailsPage({ params }: { params: Promise<{ id: s
   const [loading, setLoading] = useState(true);
   const [rating, setRating] = useState("3");
   const [notes, setNotes] = useState("");
+  const [sessionRate60, setSessionRate60] = useState("120");
+  const [sessionRate90, setSessionRate90] = useState("180");
+  const [sessionRate120, setSessionRate120] = useState("240");
+  const [trackAdjustments, setTrackAdjustments] = useState<Record<CourseType, string>>({ scratch: "0", python: "20", web: "30", ai: "40" });
+  const [financeNotes, setFinanceNotes] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [reassigning, setReassigning] = useState(false);
   const [candidates, setCandidates] = useState<TeacherListItem[]>([]);
@@ -41,6 +47,12 @@ export default function TeacherDetailsPage({ params }: { params: Promise<{ id: s
     setTeacher(data);
     setRating(data?.manualRating ? String(data.manualRating) : "3");
     setNotes(data?.evaluationNotes ?? "");
+    const finance = getTeacherFinanceConfig(id);
+    setSessionRate60(String(finance.sessionRate60));
+    setSessionRate90(String(finance.sessionRate90));
+    setSessionRate120(String(finance.sessionRate120));
+    setTrackAdjustments({ scratch: String(finance.trackAdjustments.scratch), python: String(finance.trackAdjustments.python), web: String(finance.trackAdjustments.web), ai: String(finance.trackAdjustments.ai) });
+    setFinanceNotes(finance.notes ?? "");
 
     const nextCandidates = teacherItems
       .filter((item) => item.id !== id && item.isActive)
@@ -59,6 +71,12 @@ export default function TeacherDetailsPage({ params }: { params: Promise<{ id: s
       setTeacher(data);
       setRating(data?.manualRating ? String(data.manualRating) : "3");
       setNotes(data?.evaluationNotes ?? "");
+      const finance = getTeacherFinanceConfig(id);
+      setSessionRate60(String(finance.sessionRate60));
+      setSessionRate90(String(finance.sessionRate90));
+      setSessionRate120(String(finance.sessionRate120));
+      setTrackAdjustments({ scratch: String(finance.trackAdjustments.scratch), python: String(finance.trackAdjustments.python), web: String(finance.trackAdjustments.web), ai: String(finance.trackAdjustments.ai) });
+      setFinanceNotes(finance.notes ?? "");
       const nextCandidates = teacherItems
         .filter((item) => item.id !== id && item.isActive)
         .sort((a, b) => a.fullName.localeCompare(b.fullName, "ar"));
@@ -79,6 +97,29 @@ export default function TeacherDetailsPage({ params }: { params: Promise<{ id: s
   const needsAttention = reportSummaries.length - readyReports;
   const nextCheckpoint = [...reportSummaries].sort((a, b) => a.snapshot.sessionsUntilNext - b.snapshot.sessionsUntilNext)[0] ?? null;
   const hasBlockingSessions = (teacher?.linkedSessions?.length ?? 0) > 0;
+  const financeSummary = useMemo(() => {
+    if (!teacher) return null;
+    const config = getTeacherFinanceConfig(teacher.id);
+    return computeTeacherFinanceSummary(teacher.linkedSessions, config);
+  }, [teacher, sessionRate60, sessionRate90, sessionRate120, trackAdjustments]);
+
+  function handleSaveFinance() {
+    if (!teacher) return;
+    saveTeacherFinanceConfig({
+      teacherId: teacher.id,
+      sessionRate60: Number(sessionRate60) || 0,
+      sessionRate90: Number(sessionRate90) || 0,
+      sessionRate120: Number(sessionRate120) || 0,
+      trackAdjustments: {
+        scratch: Number(trackAdjustments.scratch) || 0,
+        python: Number(trackAdjustments.python) || 0,
+        web: Number(trackAdjustments.web) || 0,
+        ai: Number(trackAdjustments.ai) || 0,
+      },
+      notes: financeNotes,
+    });
+    toast.success(t(locale, "تم حفظ الإعدادات المالية", "Finance settings saved"));
+  }
 
   async function handleDeleteTeacher() {
     if (!teacher) return;
@@ -301,6 +342,45 @@ export default function TeacherDetailsPage({ params }: { params: Promise<{ id: s
         </div>
 
         <div className="rounded-2xl border border-border bg-card p-5">
+          <h3 className="mb-3 flex items-center gap-2 font-bold text-foreground"><Wallet size={18} className="text-brand-600" />{t(locale, "الجزء المالي", "Finance")}</h3>
+          <div className="grid grid-cols-3 gap-2 text-center text-xs">
+            <Metric label={t(locale, "أسبوعي تقديري", "Weekly est.")} value={financeSummary ? formatCurrencyEgp(financeSummary.weeklyEstimated, locale) : formatCurrencyEgp(0, locale)} />
+            <Metric label={t(locale, "شهري تقديري", "Monthly est.")} value={financeSummary ? formatCurrencyEgp(financeSummary.monthlyEstimated, locale) : formatCurrencyEgp(0, locale)} />
+            <Metric label={t(locale, "متوسط الحصة", "Avg session")} value={financeSummary ? formatCurrencyEgp(financeSummary.averagePerSession, locale) : formatCurrencyEgp(0, locale)} />
+          </div>
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <MoneyInput label={t(locale, "حصة 60 دقيقة", "60-min session")} value={sessionRate60} onChange={setSessionRate60} />
+            <MoneyInput label={t(locale, "حصة 90 دقيقة", "90-min session")} value={sessionRate90} onChange={setSessionRate90} />
+            <MoneyInput label={t(locale, "حصة 120 دقيقة", "120-min session")} value={sessionRate120} onChange={setSessionRate120} />
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <MoneyInput label="Scratch" value={trackAdjustments.scratch} onChange={(value) => setTrackAdjustments((prev) => ({ ...prev, scratch: value }))} hint={t(locale, "إضافة/خصم لكل حصة", "Adjustment per session")} />
+            <MoneyInput label="Python" value={trackAdjustments.python} onChange={(value) => setTrackAdjustments((prev) => ({ ...prev, python: value }))} hint={t(locale, "إضافة/خصم لكل حصة", "Adjustment per session")} />
+            <MoneyInput label="Web" value={trackAdjustments.web} onChange={(value) => setTrackAdjustments((prev) => ({ ...prev, web: value }))} hint={t(locale, "إضافة/خصم لكل حصة", "Adjustment per session")} />
+            <MoneyInput label="AI" value={trackAdjustments.ai} onChange={(value) => setTrackAdjustments((prev) => ({ ...prev, ai: value }))} hint={t(locale, "إضافة/خصم لكل حصة", "Adjustment per session")} />
+          </div>
+          <div className="mt-4">
+            <label className="mb-1.5 block text-sm font-medium text-foreground">{t(locale, "ملاحظات الحساب", "Finance notes")}</label>
+            <textarea value={financeNotes} onChange={(event) => setFinanceNotes(event.target.value)} rows={3} className="w-full rounded-xl border border-input bg-muted/50 px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-transparent focus:ring-2 focus:ring-ring" />
+          </div>
+          <button type="button" onClick={handleSaveFinance} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-brand-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600">
+            <Save size={16} />
+            {t(locale, "حفظ الإعدادات المالية", "Save finance settings")}
+          </button>
+          {financeSummary && financeSummary.lines.length > 0 ? (
+            <div className="mt-4 space-y-2">
+              <p className="text-sm font-bold text-foreground">{t(locale, "تفصيل الحصص التقديري", "Estimated session breakdown")}</p>
+              {financeSummary.lines.slice(0, 6).map((line) => (
+                <div key={line.sessionId} className="flex items-center justify-between gap-3 rounded-xl bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                  <span>{line.className} • {line.minutes} {t(locale, "دقيقة", "min")}</span>
+                  <span className="font-semibold text-foreground">{line.payout} {t(locale, "ج.م", "EGP")}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="rounded-2xl border border-border bg-card p-5">
           <h3 className="mb-3 flex items-center gap-2 font-bold text-foreground"><FileText size={18} className="text-brand-600" />{t(locale, "المتابعة التشغيلية", "Operational follow-up")}</h3>
           <div className="space-y-3">
             <Metric label={t(locale, "تقارير جاهزة", "Reports ready")} value={String(readyReports)} />
@@ -380,6 +460,16 @@ function Info({ icon: Icon, label, value, href }: { icon: typeof Phone; label: s
   const content = <div className="rounded-xl bg-muted/40 p-3"><div className="flex items-center gap-2 text-xs text-muted-foreground"><Icon size={14} />{label}</div><p className="mt-1 font-semibold text-foreground">{value}</p></div>;
   if (!href) return content;
   return <a href={href} className="block transition-opacity hover:opacity-85">{content}</a>;
+}
+
+function MoneyInput({ label, value, onChange, hint }: { label: string; value: string; onChange: (value: string) => void; hint?: string }) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-sm font-medium text-foreground">{label}</label>
+      <input value={value} onChange={(event) => onChange(event.target.value)} inputMode="numeric" className="w-full rounded-xl border border-input bg-muted/50 px-4 py-2.5 text-sm text-foreground focus:border-transparent focus:ring-2 focus:ring-ring" />
+      {hint ? <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p> : null}
+    </div>
+  );
 }
 
 function EmptyCopy({ locale, ar, en }: { locale: "ar" | "en"; ar: string; en: string }) {

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, Phone, Plus, Search } from "lucide-react";
+import { BookOpen, Phone, Plus, Search, Wallet } from "lucide-react";
 import { useUIStore } from "@/stores/ui-store";
 import { COURSE_TYPE_LABELS, COURSE_TYPE_EN_LABELS } from "@/config/labels";
 import { getEmploymentTypeLabel, t } from "@/lib/locale";
@@ -56,10 +56,16 @@ export default function TeachersPage() {
           <p className="mt-1 text-sm text-muted-foreground">{t(locale, "إدارة فريق المدرسين وربطهم بالكلاسات والطلاب الفعليين", "Manage teachers and link them with actual classes and students")}</p>
         </div>
 
-        <Link href="/teachers/new" className="inline-flex items-center gap-2 rounded-xl bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600">
-          <Plus size={18} />
-          {t(locale, "إضافة مدرس", "Add teacher")}
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link href="/teachers/finance" className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted">
+            <Wallet size={18} />
+            {t(locale, "حسابات المدرسين", "Teacher accounts")}
+          </Link>
+          <Link href="/teachers/new" className="inline-flex items-center gap-2 rounded-xl bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600">
+            <Plus size={18} />
+            {t(locale, "إضافة مدرس", "Add teacher")}
+          </Link>
+        </div>
       </div>
 
       <div className="relative max-w-md">
