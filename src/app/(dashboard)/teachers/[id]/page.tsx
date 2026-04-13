@@ -85,6 +85,14 @@ export default function TeacherDetailsPage({ params }: { params: Promise<{ id: s
             <Metric label={t(locale, "إجمالي الطلاب", "Total students")} value={teacher.studentsCount.toString()} />
           </div>
 
+
+
+          <div className="mt-6 flex flex-wrap gap-2">
+            <Link href={`/schedule/new?teacherId=${teacher.id}${teacher.specialization[0] ? `&course=${teacher.specialization[0]}` : ""}`} className="rounded-xl bg-brand-600 px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90">
+              {t(locale, "إضافة حصة لهذا المدرس", "Add session for this teacher")}
+            </Link>
+          </div>
+
           <div className="mt-6">
             <h3 className="mb-3 text-sm font-bold text-foreground">{t(locale, "الدورات المفعّلة حاليًا", "Currently active courses")}</h3>
             <div className="flex flex-wrap gap-2">

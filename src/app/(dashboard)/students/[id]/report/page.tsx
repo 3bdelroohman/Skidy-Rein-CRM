@@ -7,7 +7,7 @@ import { useUIStore } from "@/stores/ui-store";
 import { t } from "@/lib/locale";
 import { getCourseFormLabel } from "@/config/course-roadmap";
 import { formatCurrencyEgp, formatDate } from "@/lib/formatters";
-import { getStudentDetails } from "@/services/relations.service";
+import { extractLeadIdFromProjectionId, getStudentDetails } from "@/services/relations.service";
 import { buildStudentJourney } from "@/services/student-journey.service";
 import { buildStudentMonthlyReportDraft, buildStudentReportSnapshot } from "@/services/student-report.service";
 import { getStudentFinanceSnapshot, type StudentFinanceSnapshot } from "@/services/student-finance.service";
@@ -48,6 +48,8 @@ export default function StudentReportPage({ params }: { params: Promise<{ id: st
   const draft = buildStudentMonthlyReportDraft(student);
   const journey = buildStudentJourney(student);
   const financeState = getFinanceStateLabel(finance?.currentState ?? "none", locale);
+  const primaryTeacher = student.teachers[0] ?? null;
+  const sourceLeadId = extractLeadIdFromProjectionId(student.id);
 
   return (
     <div className="space-y-6">
@@ -61,10 +63,24 @@ export default function StudentReportPage({ params }: { params: Promise<{ id: st
             <p className="text-sm text-muted-foreground">{student.fullName} — {student.parentName}</p>
           </div>
         </div>
-        <button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted">
-          <Printer size={16} />
-          {t(locale, "طباعة", "Print")}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {primaryTeacher ? (
+            <Link href={`/teachers/${primaryTeacher.id}`} className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted">
+              <FileText size={16} />
+              {t(locale, "ملف المدرس", "Teacher profile")}
+            </Link>
+          ) : null}
+          {sourceLeadId ? (
+            <Link href={`/leads/${sourceLeadId}`} className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted">
+              <FileText size={16} />
+              {t(locale, "العميل الأصلي", "Source lead")}
+            </Link>
+          ) : null}
+          <button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted">
+            <Printer size={16} />
+            {t(locale, "طباعة", "Print")}
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">

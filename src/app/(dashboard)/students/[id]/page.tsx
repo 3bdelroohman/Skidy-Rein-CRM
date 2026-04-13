@@ -8,7 +8,7 @@ import { STUDENT_STATUS_META, getMetaLabel } from "@/config/status-meta";
 import { getCourseFormLabel, getCourseTracks } from "@/config/course-roadmap";
 import { t } from "@/lib/locale";
 import { formatCurrencyEgp, formatDate } from "@/lib/formatters";
-import { getStudentDetails } from "@/services/relations.service";
+import { extractLeadIdFromProjectionId, getStudentDetails } from "@/services/relations.service";
 import { buildStudentJourney } from "@/services/student-journey.service";
 import { buildStudentReportSnapshot } from "@/services/student-report.service";
 import { getStudentFinanceSnapshot, type StudentFinanceSnapshot } from "@/services/student-finance.service";
@@ -73,6 +73,7 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
   const nextDueDate = finance?.nextPendingPayment ? formatDate(finance.nextPendingPayment.dueDate, locale) : t(locale, "لا يوجد", "None");
   const nextAmount = finance?.nextPendingPayment ? formatCurrencyEgp(finance.nextPendingPayment.amount, locale) : t(locale, "لا يوجد", "None");
   const scheduleHref = `/schedule/new?className=${encodeURIComponent(linkedClassName)}${student.currentCourse ? `&course=${student.currentCourse}` : ""}${primaryTeacher ? `&teacherId=${primaryTeacher.id}` : ""}`;
+  const sourceLeadId = extractLeadIdFromProjectionId(student.id);
 
   return (
     <div className="space-y-6">
@@ -167,6 +168,11 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
               {primaryTeacher ? (
                 <Link href={`/teachers/${primaryTeacher.id}`} className="rounded-xl border border-border px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted">
                   {t(locale, "فتح ملف المدرس", "Open teacher profile")}
+                </Link>
+              ) : null}
+              {sourceLeadId ? (
+                <Link href={`/leads/${sourceLeadId}`} className="rounded-xl border border-border px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted">
+                  {t(locale, "فتح العميل الأصلي", "Open source lead")}
                 </Link>
               ) : null}
             </div>
