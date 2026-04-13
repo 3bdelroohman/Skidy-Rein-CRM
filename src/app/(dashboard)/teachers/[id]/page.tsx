@@ -2,12 +2,15 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, FileText, Phone, Save, Star, Users } from "lucide-react";
 import { useUIStore } from "@/stores/ui-store";
 import { formatCourseLabel } from "@/lib/formatters";
 import { buildStudentReportSnapshot } from "@/services/student-report.service";
 import { getEmploymentTypeLabel, t } from "@/lib/locale";
 import { getTeacherDetails } from "@/services/relations.service";
+import { deleteTeacher } from "@/services/teachers.service";
+import { toast } from "sonner";
 import { saveTeacherEvaluation } from "@/services/teacher-evaluations.service";
 import { LoadingState, PageStateCard } from "@/components/shared/page-state";
 import type { TeacherDetails } from "@/types/crm";
@@ -18,8 +21,10 @@ export default function TeacherDetailsPage({ params }: { params: Promise<{ id: s
   const { id } = use(params);
   const locale = useUIStore((state) => state.locale);
   const isAr = locale === "ar";
+  const router = useRouter();
   const [teacher, setTeacher] = useState<TeacherDetails | null>(null);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
   const [rating, setRating] = useState("3");
   const [notes, setNotes] = useState("");
 
@@ -37,6 +42,33 @@ export default function TeacherDetailsPage({ params }: { params: Promise<{ id: s
       mounted = false;
     };
   }, [id]);
+
+  const hasBlockingRelations = (teacher?.linkedSessions?.length ?? 0) > 0 || (teacher?.linkedStudents?.length ?? 0) > 0;
+
+  async function handleDeleteTeacher() {
+    if (!teacher) return;
+    if (hasBlockingRelations) {
+      toast.error(t(locale, "لا يمكن حذف المدرس لأنه مرتبط بحصص أو طلاب", "This teacher cannot be deleted while linked to sessions or students"));
+      return;
+    }
+
+    const confirmed = window.confirm(
+      t(locale, "سيتم حذف المدرس نهائيًا. هل تريد المتابعة؟", "This will permanently delete the teacher. Do you want to continue?"),
+    );
+    if (!confirmed) return;
+
+    setDeleting(true);
+    const ok = await deleteTeacher(teacher.id);
+    setDeleting(false);
+
+    if (!ok) {
+      toast.error(t(locale, "تعذر حذف المدرس", "Failed to delete teacher"));
+      return;
+    }
+
+    toast.success(t(locale, "تم حذف المدرس", "Teacher deleted"));
+    router.push("/teachers");
+  }
 
   if (loading) {
     return (

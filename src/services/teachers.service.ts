@@ -153,3 +153,23 @@ export async function createTeacher(input: CreateTeacherInput): Promise<TeacherL
   saveLocalTeachers([created, ...getLocalTeachers().filter((teacher) => teacher.id !== created.id)]);
   return created;
 }
+
+
+export async function deleteTeacher(id: string): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { error } = await supabase.from("teachers").delete().eq("id", id);
+      if (!error) {
+        saveLocalTeachers(getLocalTeachers().filter((teacher) => teacher.id !== id));
+        return true;
+      }
+    } catch {}
+  }
+
+  const current = getLocalTeachers();
+  const next = current.filter((teacher) => teacher.id !== id);
+  if (next.length === current.length) return false;
+  saveLocalTeachers(next);
+  return true;
+}
