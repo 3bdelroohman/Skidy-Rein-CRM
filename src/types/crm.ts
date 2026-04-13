@@ -429,3 +429,6 @@ export interface DashboardContext {
   fullName: string;
   fullNameAr: string;
 }
+
+
+export type { CourseType, StudentStatus, EmploymentType, PaymentStatus, PaymentMethod, LeadSource, LeadStage, LeadTemperature, LossReason, Priority, FollowUpType, CommChannel, UserRole } from "@/types/common.types";

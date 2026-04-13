@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, FileText, Printer, ReceiptText } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarPlus, FileText, Printer, ReceiptText, UserCircle } from "lucide-react";
 import { useUIStore } from "@/stores/ui-store";
 import { t } from "@/lib/locale";
 import { getCourseFormLabel } from "@/config/course-roadmap";
@@ -50,6 +50,8 @@ export default function StudentReportPage({ params }: { params: Promise<{ id: st
   const financeState = getFinanceStateLabel(finance?.currentState ?? "none", locale);
   const primaryTeacher = student.teachers[0] ?? null;
   const sourceLeadId = extractLeadIdFromProjectionId(student.id);
+  const linkedClassName = snapshot.className ?? student.className ?? t(locale, "غير مسجل", "Not assigned");
+  const scheduleHref = `/schedule/new?className=${encodeURIComponent(linkedClassName)}${student.currentCourse ? `&course=${student.currentCourse}` : ""}${primaryTeacher ? `&teacherId=${primaryTeacher.id}` : ""}`;
 
   return (
     <div className="space-y-6">
@@ -70,12 +72,26 @@ export default function StudentReportPage({ params }: { params: Promise<{ id: st
               {t(locale, "ملف المدرس", "Teacher profile")}
             </Link>
           ) : null}
+          {student.parent ? (
+            <Link href={`/parents/${student.parent.id}`} className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted">
+              <UserCircle size={16} />
+              {t(locale, "ملف ولي الأمر", "Parent profile")}
+            </Link>
+          ) : null}
           {sourceLeadId ? (
             <Link href={`/leads/${sourceLeadId}`} className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted">
               <FileText size={16} />
               {t(locale, "العميل الأصلي", "Source lead")}
             </Link>
           ) : null}
+          <Link href={`/payments/new?studentId=${student.id}`} className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted">
+            <ReceiptText size={16} />
+            {t(locale, "إضافة دفعة", "Add payment")}
+          </Link>
+          <Link href={scheduleHref} className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted">
+            <CalendarPlus size={16} />
+            {t(locale, "إضافة حصة", "Add session")}
+          </Link>
           <button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted">
             <Printer size={16} />
             {t(locale, "طباعة", "Print")}
@@ -83,12 +99,13 @@ export default function StudentReportPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-6">
         <ReportBox labelAr="التاريخ" labelEn="Date" value={formatDate(new Date().toISOString(), locale)} />
         <ReportBox labelAr="المسار الحالي" labelEn="Current track" value={student.currentCourse ? getCourseFormLabel(student.currentCourse, locale) : t(locale, "غير محدد", "Not set")} />
         <ReportBox labelAr="المدرس الحالي" labelEn="Current teacher" value={snapshot.teacherName ?? t(locale, "غير مرتبط بعد", "Not linked yet")} />
         <ReportBox labelAr="الكلاس الحالي" labelEn="Current class" value={snapshot.className ?? t(locale, "غير مسجل", "Not assigned")} />
         <ReportBox labelAr="الحالة المالية" labelEn="Finance state" value={financeState} />
+        <ReportBox labelAr="المسؤول" labelEn="Owner" value={student.ownerName ?? t(locale, "غير مخصص", "Unassigned")} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">

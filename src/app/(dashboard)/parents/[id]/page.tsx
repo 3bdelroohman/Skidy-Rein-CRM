@@ -2,14 +2,18 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Mail, MapPin, MessageCircle, Phone, UserCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, FileText, Mail, MapPin, MessageCircle, Phone, ReceiptText, UserCircle } from "lucide-react";
 import { useUIStore } from "@/stores/ui-store";
 import { STUDENT_STATUS_META, getMetaLabel } from "@/config/status-meta";
 import { t, getStageLabel } from "@/lib/locale";
 import { formatCurrencyEgp } from "@/lib/formatters";
+import { buildStudentReportSnapshot } from "@/services/student-report.service";
 import { extractLeadIdFromProjectionId, getParentDetails } from "@/services/relations.service";
 import { LoadingState, PageStateCard } from "@/components/shared/page-state";
 import type { ParentDetails } from "@/types/crm";
+
+type ParentChildForReport = ParentDetails["childrenRecords"][number] & { teachers?: { fullName: string }[]; relatedSessions?: { className: string }[] };
+
 
 export default function ParentDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -59,6 +63,15 @@ export default function ParentDetailsPage({ params }: { params: Promise<{ id: st
     );
   }
 
+  const firstChild = parent.childrenRecords[0] ?? null;
+  const reportReadyCount = parent.childrenRecords.filter((student) => buildStudentReportSnapshot(student as ParentChildForReport).ready).length;
+  const needsReportCount = parent.childrenRecords.length - reportReadyCount;
+  const nextCheckpointStudent = [...parent.childrenRecords]
+    .map((student) => ({ student, snapshot: buildStudentReportSnapshot(student as ParentChildForReport) }))
+    .sort((a, b) => a.snapshot.sessionsUntilNext - b.snapshot.sessionsUntilNext)[0] ?? null;
+
+
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -105,6 +118,42 @@ export default function ParentDetailsPage({ params }: { params: Promise<{ id: st
               <Link href={`/leads/${projectedLeadId}`} className="inline-flex items-center rounded-xl border border-border px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted">
                 {t(locale, "فتح العميل الأصلي", "Open source lead")}
               </Link>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-border bg-card p-5">
+          <h3 className="mb-3 flex items-center gap-2 font-bold text-foreground"><ReceiptText size={18} className="text-brand-600" />{t(locale, "المتابعة التشغيلية", "Operational snapshot")}</h3>
+          <div className="space-y-3">
+            <SummaryRow label={t(locale, "تقارير جاهزة", "Reports ready")} value={String(reportReadyCount)} />
+            <SummaryRow label={t(locale, "تحتاج متابعة", "Need follow-up")} value={String(needsReportCount)} />
+            <SummaryRow label={t(locale, "الطفل الأقرب للتقرير", "Closest to report")} value={nextCheckpointStudent ? nextCheckpointStudent.student.fullName : t(locale, "لا يوجد", "None")} />
+          </div>
+          {nextCheckpointStudent ? (
+            <p className="mt-3 text-xs text-muted-foreground">
+              {t(locale, "المتبقي", "Remaining")}: {nextCheckpointStudent.snapshot.sessionsUntilNext} {t(locale, "حصص", "sessions")}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="rounded-2xl border border-border bg-card p-5">
+          <h3 className="mb-3 flex items-center gap-2 font-bold text-foreground"><FileText size={18} className="text-brand-600" />{t(locale, "إجراءات سريعة", "Quick actions")}</h3>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={`/students/new?parentName=${encodeURIComponent(parent.fullName)}&parentPhone=${encodeURIComponent(parent.phone)}`}
+              className="inline-flex items-center rounded-xl bg-brand-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
+            >
+              {t(locale, "إضافة طالب", "Add student")}
+            </Link>
+            {firstChild ? (
+              <>
+                <Link href={`/students/${firstChild.id}/report`} className="inline-flex items-center rounded-xl border border-border px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted">
+                  {t(locale, "تقرير أول طالب", "First child report")}
+                </Link>
+                <Link href={`/payments/new?studentId=${firstChild.id}`} className="inline-flex items-center rounded-xl border border-border px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted">
+                  {t(locale, "إضافة دفعة", "Add payment")}
+                </Link>
+              </>
             ) : null}
           </div>
         </div>

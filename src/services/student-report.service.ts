@@ -1,5 +1,5 @@
 import { getCourseFormLabel } from "@/config/course-roadmap";
-import type { StudentDetails } from "@/types/crm";
+import type { CourseType, ScheduleSessionItem, TeacherListItem } from "@/types/crm";
 
 export interface StudentReportSnapshot {
   ready: boolean;
@@ -30,7 +30,16 @@ function ceilToCheckpoint(value: number, checkpoint = 4): number {
   return Math.ceil(value / checkpoint) * checkpoint;
 }
 
-export function buildStudentReportSnapshot(student: StudentDetails): StudentReportSnapshot {
+export interface StudentReportSubject {
+  fullName: string;
+  sessionsAttended: number;
+  currentCourse: CourseType | null;
+  className: string | null;
+  teachers?: Pick<TeacherListItem, "fullName">[];
+  relatedSessions?: Pick<ScheduleSessionItem, "className">[];
+}
+
+export function buildStudentReportSnapshot(student: StudentReportSubject): StudentReportSnapshot {
   const totalSessions = Math.max(0, student.sessionsAttended);
   const nextCheckpoint = ceilToCheckpoint(totalSessions + (totalSessions % 4 === 0 ? 4 : 0));
   const currentCheckpoint = totalSessions >= 4 ? Math.floor(totalSessions / 4) * 4 : 0;
@@ -45,14 +54,14 @@ export function buildStudentReportSnapshot(student: StudentDetails): StudentRepo
     sessionsInCurrentCycle,
     sessionsUntilNext,
     progressPercent,
-    teacherName: student.teachers[0]?.fullName ?? null,
-    className: student.className ?? student.relatedSessions[0]?.className ?? null,
+    teacherName: student.teachers?.[0]?.fullName ?? null,
+    className: student.className ?? student.relatedSessions?.[0]?.className ?? null,
     cycleLabelAr: currentCheckpoint > 0 ? `تقرير حتى الحصة ${currentCheckpoint}` : "قبل أول تقرير شهري",
     cycleLabelEn: currentCheckpoint > 0 ? `Report through session ${currentCheckpoint}` : "Before the first monthly report",
   };
 }
 
-export function buildStudentMonthlyReportDraft(student: StudentDetails): StudentMonthlyReportDraft {
+export function buildStudentMonthlyReportDraft(student: StudentReportSubject): StudentMonthlyReportDraft {
   const snapshot = buildStudentReportSnapshot(student);
   const courseLabelAr = student.currentCourse ? getCourseFormLabel(student.currentCourse, "ar") : "المسار الحالي";
   const courseLabelEn = student.currentCourse ? getCourseFormLabel(student.currentCourse, "en") : "current track";

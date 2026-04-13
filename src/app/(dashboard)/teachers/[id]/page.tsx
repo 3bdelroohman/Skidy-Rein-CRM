@@ -2,14 +2,17 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, Phone, Save, Star, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, FileText, Phone, Save, Star, Users } from "lucide-react";
 import { useUIStore } from "@/stores/ui-store";
 import { formatCourseLabel } from "@/lib/formatters";
+import { buildStudentReportSnapshot } from "@/services/student-report.service";
 import { getEmploymentTypeLabel, t } from "@/lib/locale";
 import { getTeacherDetails } from "@/services/relations.service";
 import { saveTeacherEvaluation } from "@/services/teacher-evaluations.service";
 import { LoadingState, PageStateCard } from "@/components/shared/page-state";
 import type { TeacherDetails } from "@/types/crm";
+
+type TeacherLinkedStudentForReport = TeacherDetails["linkedStudents"][number] & { teachers?: { fullName: string }[]; relatedSessions?: { className: string }[] };
 
 export default function TeacherDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -60,6 +63,13 @@ export default function TeacherDetailsPage({ params }: { params: Promise<{ id: s
       />
     );
   }
+
+  const reportSummaries = teacher.linkedStudents.map((student) => ({ student, snapshot: buildStudentReportSnapshot(student as TeacherLinkedStudentForReport) }));
+  const readyReports = reportSummaries.filter((item) => item.snapshot.ready).length;
+  const needsAttention = reportSummaries.length - readyReports;
+  const nextCheckpoint = [...reportSummaries].sort((a, b) => a.snapshot.sessionsUntilNext - b.snapshot.sessionsUntilNext)[0] ?? null;
+
+
 
   return (
     <div className="space-y-6">
@@ -142,6 +152,28 @@ export default function TeacherDetailsPage({ params }: { params: Promise<{ id: s
             {teacher.evaluationUpdatedAt ? <p className="text-xs text-muted-foreground">{t(locale, "آخر تحديث", "Last updated")}: {new Date(teacher.evaluationUpdatedAt).toLocaleString(isAr ? "ar-EG" : "en-US")}</p> : null}
           </div>
         </div>
+
+        <div className="rounded-2xl border border-border bg-card p-5">
+          <h3 className="mb-3 flex items-center gap-2 font-bold text-foreground"><FileText size={18} className="text-brand-600" />{t(locale, "المتابعة التشغيلية", "Operational follow-up")}</h3>
+          <div className="space-y-3">
+            <Metric label={t(locale, "تقارير جاهزة", "Reports ready")} value={String(readyReports)} />
+            <Metric label={t(locale, "تحتاج متابعة", "Need follow-up")} value={String(needsAttention)} />
+          </div>
+          {nextCheckpoint ? (
+            <div className="mt-4 rounded-xl bg-muted/40 p-3 text-sm text-muted-foreground">
+              <p className="font-semibold text-foreground">{nextCheckpoint.student.fullName}</p>
+              <p className="mt-1">{t(locale, "الأقرب للتقرير التالي", "Closest to next report")}: {nextCheckpoint.snapshot.sessionsUntilNext} {t(locale, "حصص", "sessions")}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Link href={`/students/${nextCheckpoint.student.id}/report`} className="rounded-xl border border-border px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted">
+                  {t(locale, "فتح التقرير", "Open report")}
+                </Link>
+                <Link href={`/students/${nextCheckpoint.student.id}`} className="rounded-xl border border-border px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted">
+                  {t(locale, "ملف الطالب", "Student profile")}
+                </Link>
+              </div>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -177,8 +209,12 @@ export default function TeacherDetailsPage({ params }: { params: Promise<{ id: s
                   <div>
                     <p className="font-semibold text-foreground">{student.fullName}</p>
                     <p className="mt-1 text-xs text-muted-foreground">{student.className ?? t(locale, "غير مسجل", "Not assigned")}</p>
+                    <p className="mt-2 text-[11px] text-brand-700 dark:text-brand-300">{t(locale, "افتح تقرير الطالب من الملف", "Open the student report from the profile")}</p>
                   </div>
+                  <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">{student.parentName}</span>
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">{buildStudentReportSnapshot(student as TeacherLinkedStudentForReport).ready ? t(locale, "تقرير جاهز", "Report ready") : t(locale, "قيد المتابعة", "In progress")}</span>
+                </div>
                 </Link>
               ))}
             </div>
