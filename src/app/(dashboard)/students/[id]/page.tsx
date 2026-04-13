@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, CalendarDays, GraduationCap, MessageCircle, UserCircle, ClipboardList } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarDays, GraduationCap, MessageCircle, UserCircle, ClipboardList, FileText } from "lucide-react";
 import { useUIStore } from "@/stores/ui-store";
 import { STUDENT_STATUS_META, getMetaLabel } from "@/config/status-meta";
 import { getCourseFormLabel, getCourseTracks } from "@/config/course-roadmap";
@@ -76,6 +76,7 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
         <div>
           <h1 className="text-2xl font-bold text-foreground">{student.fullName}</h1>
           <p className="text-sm text-muted-foreground">{student.parentName} — {student.parentPhone}</p>
+          <p className="text-xs text-muted-foreground">{t(locale, "المسؤول", "Owner")}: {student.ownerName ?? t(locale, "غير مخصص", "Unassigned")}</p>
         </div>
       </div>
 
@@ -95,6 +96,7 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
             <Info label={t(locale, "عدد الحصص", "Sessions attended")} value={student.sessionsAttended.toString()} />
             <Info label={t(locale, "إجمالي المدفوع", "Total paid")} value={formatCurrencyEgp(student.totalPaid, locale)} />
             <Info label={t(locale, "المدرس الحالي", "Current teacher")} value={report.teacherName ?? t(locale, "غير مرتبط بعد", "Not linked yet")} />
+            <Info label={t(locale, "المسؤول", "Owner")} value={student.ownerName ?? t(locale, "غير مخصص", "Unassigned")} />
           </div>
           {courseTracks.length > 0 ? (
             <div className="mt-4 border-t border-border pt-4">
@@ -124,6 +126,9 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
                   {t(locale, "فتح ملف ولي الأمر", "Open parent profile")}
                 </Link>
               ) : null}
+              <Link href={`/students/${student.id}/report`} className="rounded-xl border border-brand-200 px-3 py-2 text-xs font-semibold text-brand-700 transition-colors hover:bg-brand-50 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950">
+                {t(locale, "عرض التقرير الشهري", "Open monthly report")}
+              </Link>
             </div>
           </div>
 

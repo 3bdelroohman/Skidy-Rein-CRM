@@ -1,4 +1,5 @@
 import type { StudentDetails } from "@/types/crm";
+import { getCourseTrackMeta } from "@/config/course-roadmap";
 import { buildStudentReportSnapshot } from "@/services/student-report.service";
 
 export interface StudentJourneyMilestone {
@@ -19,6 +20,7 @@ export interface StudentJourneySummary {
 
 export function buildStudentJourney(student: StudentDetails): StudentJourneySummary {
   const report = buildStudentReportSnapshot(student);
+  const trackMeta = getCourseTrackMeta(student.currentCourse);
 
   const milestones: StudentJourneyMilestone[] = [
     {
@@ -41,8 +43,8 @@ export function buildStudentJourney(student: StudentDetails): StudentJourneySumm
       id: "course",
       titleAr: "المسار الحالي",
       titleEn: "Current track",
-      detailAr: student.currentCourse ? `يعمل الآن داخل مسار ${student.currentCourse}` : "لم يتم تحديد المسار بعد",
-      detailEn: student.currentCourse ? `Currently progressing in ${student.currentCourse}` : "No track assigned yet",
+      detailAr: trackMeta ? `يعمل الآن داخل ${trackMeta.labelAr}` : (student.currentCourse ? `يعمل الآن داخل مسار ${student.currentCourse}` : "لم يتم تحديد المسار بعد"),
+      detailEn: trackMeta ? `Currently progressing in ${trackMeta.labelEn}` : (student.currentCourse ? `Currently progressing in ${student.currentCourse}` : "No track assigned yet"),
       tone: student.currentCourse ? "info" : "warning",
     },
     {
@@ -57,8 +59,8 @@ export function buildStudentJourney(student: StudentDetails): StudentJourneySumm
       id: "sessions",
       titleAr: "الإنجاز داخل الحصص",
       titleEn: "Session progress",
-      detailAr: `أنجز ${student.sessionsAttended} حصة حتى الآن` ,
-      detailEn: `Completed ${student.sessionsAttended} sessions so far`,
+      detailAr: `أنجز ${student.sessionsAttended} حصة حتى الآن — ${report.cycleLabelAr}`,
+      detailEn: `Completed ${student.sessionsAttended} sessions so far — ${report.cycleLabelEn}`,
       tone: student.sessionsAttended >= 4 ? "success" : "info",
     },
     {

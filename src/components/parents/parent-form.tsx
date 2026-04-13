@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { t } from "@/lib/locale";
 import { guardParentDuplicate } from "@/services/duplicate-guard.service";
 import { useUIStore } from "@/stores/ui-store";
-import { getCourseFamilyFromTrack, getCourseTrackLabel, getCourseTrackOptions, suggestCourseByAge } from "@/config/course-roadmap";
+import { getCourseFamilyFromTrack, getCourseTrackGroups, getCourseTrackLabel, getCourseTrackOptions, suggestCourseByAge } from "@/config/course-roadmap";
 import type { CreateParentInput } from "@/types/crm";
 
 interface ParentFormProps {
@@ -44,6 +44,7 @@ export function ParentForm({
   });
 
   const trackOptions = useMemo(() => getCourseTrackOptions(locale), [locale]);
+  const trackGroups = useMemo(() => getCourseTrackGroups(locale), [locale]);
 
   const updateField = (field: keyof typeof form, value: string) => {
     setForm((prev) => {
@@ -145,7 +146,7 @@ export function ParentForm({
             <FormField label={t(locale, "اسم الطالب", "Student name")} value={form.firstStudentName} onChange={(value) => updateField("firstStudentName", value)} placeholder={t(locale, "مثال: يوسف", "Example: Youssef")} />
             <FormField label={t(locale, "العمر", "Age")} value={form.firstStudentAge} onChange={(value) => updateField("firstStudentAge", value)} placeholder="10" type="number" min={4} max={18} />
             <div className="sm:col-span-2">
-              <FormSelect label={t(locale, "الكورس / المسار", "Course / track")} value={form.firstStudentTrackId} onChange={(value) => updateField("firstStudentTrackId", value)} options={trackOptions.map((item) => ({ value: item.value, label: item.label }))} placeholder={t(locale, "اختر الكورس الأنسب", "Choose the most suitable course")} />
+              <FormSelect label={t(locale, "الكورس / المسار", "Course / track")} value={form.firstStudentTrackId} onChange={(value) => updateField("firstStudentTrackId", value)} options={trackGroups.flatMap((group) => group.options.map((option) => ({ value: option.value, label: option.label, group: group.label })))} placeholder={t(locale, "اختر الكورس الأنسب", "Choose the most suitable course")} />
               {form.firstStudentTrackId ? <p className="mt-2 text-xs leading-5 text-muted-foreground">{getCourseTrackLabel(form.firstStudentTrackId, locale)}</p> : null}
             </div>
             <div className="sm:col-span-2">
@@ -210,17 +211,34 @@ function FormSelect({
   label: string;
   value: string;
   onChange: (value: string) => void;
-  options: Array<{ value: string; label: string }>;
+  options: Array<{ value: string; label: string; group?: string }>;
   placeholder?: string;
 }) {
+  const grouped = options.reduce<Record<string, Array<{ value: string; label: string }>>>((acc, option) => {
+    const key = option.group ?? "";
+    if (!acc[key]) acc[key] = [];
+    acc[key].push({ value: option.value, label: option.label });
+    return acc;
+  }, {});
+
   return (
     <div>
       <label className="mb-1.5 block text-sm font-medium text-foreground">{label}</label>
       <select value={value} onChange={(event) => onChange(event.target.value)} className="w-full rounded-xl border border-input bg-muted/50 px-4 py-2.5 text-sm text-foreground focus:border-transparent focus:ring-2 focus:ring-ring">
         {placeholder ? <option value="">{placeholder}</option> : null}
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>{option.label}</option>
-        ))}
+        {Object.entries(grouped).map(([group, groupOptions]) =>
+          group ? (
+            <optgroup key={group} label={group}>
+              {groupOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </optgroup>
+          ) : (
+            groupOptions.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))
+          ),
+        )}
       </select>
     </div>
   );

@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, GraduationCap, Save } from "lucide-react";
 import { toast } from "sonner";
-import { getCourseFamilyFromTrack, getCourseTrackLabel, getCourseTrackOptions, suggestCourseByAge } from "@/config/course-roadmap";
+import { getCourseFamilyFromTrack, getCourseTrackGroups, getCourseTrackLabel, getCourseTrackOptions, suggestCourseByAge } from "@/config/course-roadmap";
 import { STUDENT_STATUS_META, getMetaLabel } from "@/config/status-meta";
 import { t } from "@/lib/locale";
 import { guardStudentDuplicate } from "@/services/duplicate-guard.service";
@@ -55,6 +55,7 @@ export function StudentForm({
   });
 
   const trackOptions = useMemo(() => getCourseTrackOptions(locale), [locale]);
+  const trackGroups = useMemo(() => getCourseTrackGroups(locale), [locale]);
   const statusOptions = useMemo(
     () => Object.entries(STUDENT_STATUS_META).map(([value, meta]) => ({ value: value as StudentStatus, label: getMetaLabel(meta, locale) })),
     [locale],
@@ -153,7 +154,7 @@ export function StudentForm({
             <FormField label={t(locale, "اسم ولي الأمر *", "Parent name *")} value={form.parentName} onChange={(value) => updateField("parentName", value)} placeholder={t(locale, "مثال: أحمد محمد", "Example: Ahmed Mohamed")} />
             <FormField label={t(locale, "رقم ولي الأمر *", "Parent phone *")} value={form.parentPhone} onChange={(value) => updateField("parentPhone", value)} placeholder="01012345678" type="tel" />
             <div className="space-y-2 sm:col-span-2">
-              <FormSelect label={t(locale, "الكورس / المسار", "Course / track")} value={form.selectedTrackId} onChange={(value) => updateField("selectedTrackId", value)} options={trackOptions.map((item) => ({ value: item.value, label: item.label }))} placeholder={t(locale, "اختر الكورس الأنسب", "Choose the most suitable course")} />
+              <FormSelect label={t(locale, "الكورس / المسار", "Course / track")} value={form.selectedTrackId} onChange={(value) => updateField("selectedTrackId", value)} options={trackGroups.flatMap((group) => group.options.map((option) => ({ value: option.value, label: option.label, group: group.label })))} placeholder={t(locale, "اختر الكورس الأنسب", "Choose the most suitable course")} />
               {form.selectedTrackId ? <p className="text-xs leading-5 text-muted-foreground">{getCourseTrackLabel(form.selectedTrackId, locale)}</p> : null}
             </div>
             <FormSelect label={t(locale, "الحالة", "Status")} value={form.status} onChange={(value) => updateField("status", value)} options={statusOptions} />
@@ -223,17 +224,34 @@ function FormSelect({
   label: string;
   value: string;
   onChange: (value: string) => void;
-  options: Array<{ value: string; label: string }>;
+  options: Array<{ value: string; label: string; group?: string }>;
   placeholder?: string;
 }) {
+  const grouped = options.reduce<Record<string, Array<{ value: string; label: string }>>>((acc, option) => {
+    const key = option.group ?? "";
+    if (!acc[key]) acc[key] = [];
+    acc[key].push({ value: option.value, label: option.label });
+    return acc;
+  }, {});
+
   return (
     <div>
       <label className="mb-1.5 block text-sm font-medium text-foreground">{label}</label>
       <select value={value} onChange={(event) => onChange(event.target.value)} className="w-full rounded-xl border border-input bg-muted/50 px-4 py-2.5 text-sm text-foreground focus:border-transparent focus:ring-2 focus:ring-ring">
         {placeholder ? <option value="">{placeholder}</option> : null}
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>{option.label}</option>
-        ))}
+        {Object.entries(grouped).map(([group, groupOptions]) =>
+          group ? (
+            <optgroup key={group} label={group}>
+              {groupOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </optgroup>
+          ) : (
+            groupOptions.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))
+          ),
+        )}
       </select>
     </div>
   );

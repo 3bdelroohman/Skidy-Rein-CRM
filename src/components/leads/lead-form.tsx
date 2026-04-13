@@ -19,7 +19,7 @@ import {
   TEMPERATURE_EN_LABELS,
   TEMPERATURE_LABELS,
 } from "@/config/labels";
-import { getCourseFamilyFromTrack, getCourseTrackLabel, getCourseTrackOptions, suggestCourseByAge } from "@/config/course-roadmap";
+import { getCourseFamilyFromTrack, getCourseTrackGroups, getCourseTrackLabel, getCourseTrackOptions, suggestCourseByAge } from "@/config/course-roadmap";
 import { MOCK_TEAM } from "@/lib/mock-data";
 import { t } from "@/lib/locale";
 import { guardLeadDuplicate } from "@/services/duplicate-guard.service";
@@ -102,6 +102,7 @@ export function LeadForm({
   );
 
   const courseOptions = useMemo(() => getCourseTrackOptions(locale).map((option) => ({ value: option.value, label: option.label, family: option.family })), [locale]);
+  const trackGroups = useMemo(() => getCourseTrackGroups(locale), [locale]);
 
   const temperatureOptions = useMemo(
     () => Object.entries(isAr ? TEMPERATURE_LABELS : TEMPERATURE_EN_LABELS).map(([value, label]) => ({ value: value as LeadTemperature, label })),
@@ -220,7 +221,7 @@ export function LeadForm({
             <FormField label={t(locale, "اسم الطفل *", "Child name *")} value={form.childName} onChange={(value) => updateField("childName", value)} placeholder={t(locale, "مثال: يوسف", "Example: Youssef")} />
             <FormField label={t(locale, "العمر *", "Age *")} type="number" value={form.childAge} onChange={(value) => updateField("childAge", value)} placeholder="10" min={4} max={18} />
             <div className="space-y-2">
-              <FormSelect label={t(locale, "الكورس / المسار", "Course / track")} value={form.selectedTrackId} onChange={(value) => updateField("selectedTrackId", value)} options={courseOptions.map((option) => ({ value: option.value, label: option.label }))} placeholder={t(locale, "اختر الكورس الأنسب", "Choose the most suitable course")} />
+              <FormSelect label={t(locale, "الكورس / المسار", "Course / track")} value={form.selectedTrackId} onChange={(value) => updateField("selectedTrackId", value)} options={trackGroups.flatMap((group) => group.options.map((option) => ({ value: option.value, label: option.label, group: group.label })))} placeholder={t(locale, "اختر الكورس الأنسب", "Choose the most suitable course")} />
               {form.selectedTrackId ? (
                 <p className="text-xs leading-5 text-muted-foreground">
                   {getCourseTrackLabel(form.selectedTrackId, locale)}
@@ -338,17 +339,34 @@ function FormSelect({
   label: string;
   value: string;
   onChange: (value: string) => void;
-  options: Array<{ value: string; label: string }>;
+  options: Array<{ value: string; label: string; group?: string }>;
   placeholder?: string;
 }) {
+  const grouped = options.reduce<Record<string, Array<{ value: string; label: string }>>>((acc, option) => {
+    const key = option.group ?? "";
+    if (!acc[key]) acc[key] = [];
+    acc[key].push({ value: option.value, label: option.label });
+    return acc;
+  }, {});
+
   return (
     <div>
       <label className="mb-1.5 block text-sm font-medium text-foreground">{label}</label>
       <select value={value} onChange={(event) => onChange(event.target.value)} className="w-full rounded-xl border border-input bg-muted/50 px-4 py-2.5 text-sm text-foreground focus:border-transparent focus:ring-2 focus:ring-ring">
         {placeholder ? <option value="">{placeholder}</option> : null}
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>{option.label}</option>
-        ))}
+        {Object.entries(grouped).map(([group, groupOptions]) =>
+          group ? (
+            <optgroup key={group} label={group}>
+              {groupOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </optgroup>
+          ) : (
+            groupOptions.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))
+          ),
+        )}
       </select>
     </div>
   );

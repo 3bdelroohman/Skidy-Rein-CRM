@@ -21,6 +21,14 @@ export interface CourseTrackOption {
   descriptionEn: string;
 }
 
+
+export interface CourseTrackGroup {
+  family: CourseType;
+  label: string;
+  description: string;
+  options: Array<{ value: string; label: string; description: string }>
+}
+
 export const COURSE_ROADMAP_OPTIONS: CourseRoadmapOption[] = [
   {
     value: "scratch",
@@ -132,4 +140,23 @@ export function suggestCourseByAge(age: number, hasPriorExperience = false): Cou
   if (age <= 14) return hasPriorExperience ? "python" : "scratch";
   if (age <= 16) return hasPriorExperience ? "web" : "python";
   return hasPriorExperience ? "ai" : "web";
+}
+
+
+export function getCourseTrackGroups(locale: Locale = "ar"): CourseTrackGroup[] {
+  return COURSE_ROADMAP_OPTIONS.map((family) => ({
+    family: family.value,
+    label: locale === "ar" ? family.formLabelAr : family.formLabelEn,
+    description: locale === "ar" ? family.descriptionAr : family.descriptionEn,
+    options: COURSE_TRACK_OPTIONS.filter((item) => item.family === family.value).map((item) => ({
+      value: item.id,
+      label: locale === "ar" ? item.labelAr : item.labelEn,
+      description: locale === "ar" ? item.descriptionAr : item.descriptionEn,
+    })),
+  }));
+}
+
+export function getCourseTrackMeta(trackId: string | null | undefined): CourseTrackOption | null {
+  if (!trackId) return null;
+  return COURSE_TRACK_OPTIONS.find((item) => item.id === trackId) ?? null;
 }
