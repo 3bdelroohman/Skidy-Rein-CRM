@@ -1,6 +1,7 @@
 import { createBrowserClient } from "@supabase/ssr";
 import type { CourseType } from "@/types/common.types";
-import type { ParentListItem, ScheduleSessionDetails, ScheduleSessionItem, StudentListItem, TeacherListItem } from "@/types/crm";
+import type { Database } from "@/types/database.types";
+import type { CreateScheduleEntryInput, ParentListItem, ScheduleSessionDetails, ScheduleSessionItem, StudentListItem, TeacherListItem } from "@/types/crm";
 import { isBrowser, readStorage, writeStorage } from "@/services/storage";
 import { listParents } from "@/services/parents.service";
 import { listStudents } from "@/services/students.service";
@@ -54,7 +55,7 @@ function getSupabaseClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key || !isBrowser()) return null;
-  return createBrowserClient(url, key);
+  return createBrowserClient<Database>(url, key);
 }
 
 function sortSessions(items: ScheduleSessionItem[]): ScheduleSessionItem[] {
@@ -324,4 +325,65 @@ export async function getScheduleOverview(): Promise<{
     busiestDay: busiestDayEntry ? Number(busiestDayEntry[0]) : 0,
     busiestDayCount: busiestDayEntry ? Number(busiestDayEntry[1]) : 0,
   };
+}
+
+
+export async function createScheduleEntry(input: CreateScheduleEntryInput): Promise<ScheduleSessionItem> {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    throw new Error("تعذر الاتصال بقاعدة البيانات. أعد المحاولة بعد تسجيل الدخول أو التحقق من الإعدادات.");
+  }
+
+  const teachers = await listTeachers();
+  const teacher = teachers.find((item) => item.id === input.teacherId) ?? null;
+  if (!teacher) {
+    throw new Error("اختر مدرسًا صحيحًا قبل حفظ الحصة.");
+  }
+
+  const existing = await listScheduleSessions();
+  const clash = existing.find((session) => {
+    if ((session.teacherId ?? "") !== input.teacherId) return false;
+    if (session.day !== input.day) return false;
+    const startsInside = input.startTime >= session.startTime && input.startTime < session.endTime;
+    const endsInside = input.endTime > session.startTime && input.endTime <= session.endTime;
+    const wraps = input.startTime <= session.startTime && input.endTime >= session.endTime;
+    return startsInside || endsInside || wraps;
+  });
+
+  if (clash) {
+    throw new Error(`يوجد تعارض مع ${clash.className} لنفس المدرس في هذا التوقيت.`);
+  }
+
+  const payload: Database["public"]["Tables"]["classes"]["Insert"] = {
+    name: input.className,
+    course: input.course,
+    teacher_id: input.teacherId,
+    day_of_week: input.day,
+    start_time: input.startTime,
+    end_time: input.endTime,
+    is_active: true,
+    created_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabase.from("classes").insert(payload).select("*").single();
+  if (error || !data) {
+    throw new Error(error?.message || "تعذر إنشاء الحصة في الجدول");
+  }
+
+  const created: ScheduleSessionItem = {
+    id: asString((data as Record<string, unknown>).id, crypto.randomUUID()),
+    classId: asNullableString((data as Record<string, unknown>).id),
+    teacherId: input.teacherId,
+    day: input.day,
+    startTime: input.startTime,
+    endTime: input.endTime,
+    className: input.className,
+    teacher: teacher.fullName,
+    students: 0,
+    course: input.course,
+    sessionDate: null,
+  };
+
+  saveLocalSchedule([created, ...getLocalSchedule().filter((item) => item.id !== created.id)]);
+  return created;
 }

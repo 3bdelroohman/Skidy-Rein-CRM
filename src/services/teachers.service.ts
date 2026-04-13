@@ -1,7 +1,7 @@
 import { createBrowserClient } from "@supabase/ssr";
 import type { CourseType, EmploymentType } from "@/types/common.types";
+import type { CreateTeacherInput, TeacherListItem } from "@/types/crm";
 import type { Database } from "@/types/database.types";
-import type { TeacherListItem } from "@/types/crm";
 import { MOCK_TEACHERS } from "@/lib/mock-data";
 import { isBrowser, readStorage, writeStorage } from "@/services/storage";
 
@@ -54,24 +54,32 @@ function asSpecialization(value: unknown, fallback: CourseType[] = []): CourseTy
   return fallback;
 }
 
-function mapRow(
-  row: Record<string, unknown>,
-): TeacherListItem {
-  const record = row as Record<string, unknown>;
+function normalizeName(value: string | null | undefined): string {
+  return (value ?? "").toLowerCase().replace(/[\u064B-\u065F]/g, "").replace(/\s+/g, " ").trim();
+}
+
+function normalizePhone(value: string | null | undefined): string {
+  const digits = (value ?? "").replace(/\D/g, "");
+  if (digits.startsWith("20") && digits.length > 11) return digits.slice(2);
+  if (digits.startsWith("2") && digits.length === 12) return digits.slice(1);
+  return digits;
+}
+
+function mapRow(row: Record<string, unknown>): TeacherListItem {
   const fallback = MOCK_TEACHERS.find(
-    (teacher) => teacher.fullName === asString(record.full_name) || teacher.email === asString(record.email),
+    (teacher) => teacher.fullName === asString(row.full_name) || teacher.email === asString(row.email),
   );
 
   return {
-    id: asString(record.id, crypto.randomUUID()),
-    fullName: asString(record.full_name ?? record.fullName, "مدرس غير محدد"),
-    phone: asString(record.phone, fallback?.phone ?? "—"),
-    email: asString(record.email, fallback?.email ?? "—"),
-    specialization: asSpecialization(record.specialization, fallback?.specialization ?? []),
-    employment: asEmployment(record.employment ?? fallback?.employment),
-    classesCount: asNumber(record.classes_count ?? record.classesCount, fallback?.classesCount ?? 0),
-    studentsCount: asNumber(record.students_count ?? record.studentsCount, fallback?.studentsCount ?? 0),
-    isActive: Boolean(record.is_active ?? record.isActive ?? fallback?.isActive ?? true),
+    id: asString(row.id, crypto.randomUUID()),
+    fullName: asString(row.full_name ?? row.fullName, "مدرس غير محدد"),
+    phone: asString(row.phone, fallback?.phone ?? "—"),
+    email: asString(row.email, fallback?.email ?? "") || null,
+    specialization: asSpecialization(row.specialization, fallback?.specialization ?? []),
+    employment: asEmployment(row.employment ?? fallback?.employment),
+    classesCount: asNumber(row.classes_count ?? row.classesCount, fallback?.classesCount ?? 0),
+    studentsCount: asNumber(row.students_count ?? row.studentsCount, fallback?.studentsCount ?? 0),
+    isActive: Boolean(row.is_active ?? row.isActive ?? fallback?.isActive ?? true),
   };
 }
 
@@ -89,13 +97,8 @@ export async function listTeachers(): Promise<TeacherListItem[]> {
   if (!supabase) return fallback;
 
   try {
-    const { data, error } = await supabase
-      .from("teachers")
-      .select("*")
-      .order("created_at", { ascending: false });
-
+    const { data, error } = await supabase.from("teachers").select("*").order("created_at", { ascending: false });
     if (error || !data || data.length === 0) return fallback;
-
     const mapped = data.map((row) => mapRow(row as Record<string, unknown>));
     saveLocalTeachers(mapped);
     return mapped;
@@ -107,4 +110,66 @@ export async function listTeachers(): Promise<TeacherListItem[]> {
 export async function getTeacherById(id: string): Promise<TeacherListItem | null> {
   const items = await listTeachers();
   return items.find((teacher) => teacher.id === id) ?? null;
+}
+
+export async function createTeacher(input: CreateTeacherInput): Promise<TeacherListItem> {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    throw new Error("تعذر الاتصال بقاعدة البيانات. أعد المحاولة بعد تسجيل الدخول أو التحقق من الإعدادات.");
+  }
+
+  const existing = await listTeachers();
+  const duplicate = existing.find((teacher) => {
+    const samePhone = normalizePhone(teacher.phone) === normalizePhone(input.phone);
+    const inputEmail = (input.email ?? "").trim().toLowerCase();
+    const teacherEmail = (teacher.email ?? "").trim().toLowerCase();
+    const sameEmail = teacherEmail.length > 0 && inputEmail.length > 0 && teacherEmail === inputEmail;
+    const sameName = normalizeName(teacher.fullName) === normalizeName(input.fullName);
+    return samePhone || sameEmail || (sameName && samePhone);
+  });
+
+  if (duplicate) {
+    throw new Error("يوجد مدرس مسجل بالفعل بنفس الاسم أو الهاتف أو البريد الإلكتروني.");
+  }
+
+  const payload: Database["public"]["Tables"]["teachers"]["Insert"] = {
+    full_name: input.fullName,
+    phone: input.phone,
+    email: input.email?.trim() || null,
+    employment: input.employment,
+    specialization: input.specialization,
+    classes_count: 0,
+    students_count: 0,
+    is_active: input.isActive ?? true,
+    created_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabase.from("teachers").insert(payload).select("*").single();
+  if (error || !data) {
+    throw new Error(error?.message || "تعذر إنشاء سجل المدرس");
+  }
+
+  const created = mapRow(data as Record<string, unknown>);
+  saveLocalTeachers([created, ...getLocalTeachers().filter((teacher) => teacher.id !== created.id)]);
+  return created;
+}
+
+
+export async function deleteTeacher(id: string): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { error } = await supabase.from("teachers").delete().eq("id", id);
+      if (!error) {
+        saveLocalTeachers(getLocalTeachers().filter((teacher) => teacher.id !== id));
+        return true;
+      }
+    } catch {}
+  }
+
+  const current = getLocalTeachers();
+  const next = current.filter((teacher) => teacher.id !== id);
+  if (next.length === current.length) return false;
+  saveLocalTeachers(next);
+  return true;
 }
