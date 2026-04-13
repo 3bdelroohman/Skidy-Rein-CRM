@@ -1,21 +1,25 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, FileText, Phone, Save, Star, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, FileText, Phone, RefreshCcw, Save, Star, Trash2, Users } from "lucide-react";
+import { toast } from "sonner";
 import { useUIStore } from "@/stores/ui-store";
 import { formatCourseLabel } from "@/lib/formatters";
 import { buildStudentReportSnapshot } from "@/services/student-report.service";
 import { getEmploymentTypeLabel, t } from "@/lib/locale";
 import { getTeacherDetails } from "@/services/relations.service";
-import { deleteTeacher } from "@/services/teachers.service";
-import { toast } from "sonner";
 import { saveTeacherEvaluation } from "@/services/teacher-evaluations.service";
+import { deleteTeacher, listTeachers } from "@/services/teachers.service";
+import { reassignTeacherRelations } from "@/services/teacher-reassignment.service";
 import { LoadingState, PageStateCard } from "@/components/shared/page-state";
-import type { TeacherDetails } from "@/types/crm";
+import type { TeacherDetails, TeacherListItem } from "@/types/crm";
 
-type TeacherLinkedStudentForReport = TeacherDetails["linkedStudents"][number] & { teachers?: { fullName: string }[]; relatedSessions?: { className: string }[] };
+type TeacherLinkedStudentForReport = TeacherDetails["linkedStudents"][number] & {
+  teachers?: { fullName: string }[];
+  relatedSessions?: { className: string }[];
+};
 
 export default function TeacherDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -24,31 +28,62 @@ export default function TeacherDetailsPage({ params }: { params: Promise<{ id: s
   const router = useRouter();
   const [teacher, setTeacher] = useState<TeacherDetails | null>(null);
   const [loading, setLoading] = useState(true);
-  const [deleting, setDeleting] = useState(false);
   const [rating, setRating] = useState("3");
   const [notes, setNotes] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [reassigning, setReassigning] = useState(false);
+  const [candidates, setCandidates] = useState<TeacherListItem[]>([]);
+  const [reassignTo, setReassignTo] = useState("");
+
+  async function loadTeacherPage() {
+    setLoading(true);
+    const [data, teacherItems] = await Promise.all([getTeacherDetails(id), listTeachers()]);
+    setTeacher(data);
+    setRating(data?.manualRating ? String(data.manualRating) : "3");
+    setNotes(data?.evaluationNotes ?? "");
+
+    const nextCandidates = teacherItems
+      .filter((item) => item.id !== id && item.isActive)
+      .sort((a, b) => a.fullName.localeCompare(b.fullName, "ar"));
+
+    setCandidates(nextCandidates);
+    setReassignTo((prev) => (prev && nextCandidates.some((item) => item.id === prev) ? prev : nextCandidates[0]?.id ?? ""));
+    setLoading(false);
+  }
 
   useEffect(() => {
     let mounted = true;
-    getTeacherDetails(id).then((data) => {
-      if (mounted) {
-        setTeacher(data);
-        setRating(data?.manualRating ? String(data.manualRating) : "3");
-        setNotes(data?.evaluationNotes ?? "");
-        setLoading(false);
-      }
-    });
+    (async () => {
+      const [data, teacherItems] = await Promise.all([getTeacherDetails(id), listTeachers()]);
+      if (!mounted) return;
+      setTeacher(data);
+      setRating(data?.manualRating ? String(data.manualRating) : "3");
+      setNotes(data?.evaluationNotes ?? "");
+      const nextCandidates = teacherItems
+        .filter((item) => item.id !== id && item.isActive)
+        .sort((a, b) => a.fullName.localeCompare(b.fullName, "ar"));
+      setCandidates(nextCandidates);
+      setReassignTo(nextCandidates[0]?.id ?? "");
+      setLoading(false);
+    })();
     return () => {
       mounted = false;
     };
   }, [id]);
 
-  const hasBlockingRelations = (teacher?.linkedSessions?.length ?? 0) > 0 || (teacher?.linkedStudents?.length ?? 0) > 0;
+  const reportSummaries = useMemo(
+    () => teacher?.linkedStudents.map((student) => ({ student, snapshot: buildStudentReportSnapshot(student as TeacherLinkedStudentForReport) })) ?? [],
+    [teacher],
+  );
+  const readyReports = reportSummaries.filter((item) => item.snapshot.ready).length;
+  const needsAttention = reportSummaries.length - readyReports;
+  const nextCheckpoint = [...reportSummaries].sort((a, b) => a.snapshot.sessionsUntilNext - b.snapshot.sessionsUntilNext)[0] ?? null;
+  const hasBlockingSessions = (teacher?.linkedSessions?.length ?? 0) > 0;
 
   async function handleDeleteTeacher() {
     if (!teacher) return;
-    if (hasBlockingRelations) {
-      toast.error(t(locale, "لا يمكن حذف المدرس لأنه مرتبط بحصص أو طلاب", "This teacher cannot be deleted while linked to sessions or students"));
+    if (hasBlockingSessions) {
+      toast.error(t(locale, "انقل الحصص أولًا إلى مدرس آخر ثم احذف المدرس.", "Reassign sessions first, then delete the teacher."));
       return;
     }
 
@@ -68,6 +103,28 @@ export default function TeacherDetailsPage({ params }: { params: Promise<{ id: s
 
     toast.success(t(locale, "تم حذف المدرس", "Teacher deleted"));
     router.push("/teachers");
+  }
+
+  async function handleReassignTeacher() {
+    if (!teacher || !reassignTo) return;
+    setReassigning(true);
+    const result = await reassignTeacherRelations(teacher.id, reassignTo);
+    setReassigning(false);
+
+    if (result.classesUpdated === 0 && result.sessionsUpdated === 0) {
+      toast.error(t(locale, "لم يتم العثور على حصص مرتبطة لنقلها", "No linked sessions were found to reassign"));
+      return;
+    }
+
+    toast.success(
+      t(
+        locale,
+        `تم نقل ${result.classesUpdated} كلاس و ${result.sessionsUpdated} جلسة إلى المدرس الجديد`,
+        `Reassigned ${result.classesUpdated} classes and ${result.sessionsUpdated} sessions to the new teacher`,
+      ),
+    );
+
+    await loadTeacherPage();
   }
 
   if (loading) {
@@ -96,13 +153,6 @@ export default function TeacherDetailsPage({ params }: { params: Promise<{ id: s
     );
   }
 
-  const reportSummaries = teacher.linkedStudents.map((student) => ({ student, snapshot: buildStudentReportSnapshot(student as TeacherLinkedStudentForReport) }));
-  const readyReports = reportSummaries.filter((item) => item.snapshot.ready).length;
-  const needsAttention = reportSummaries.length - readyReports;
-  const nextCheckpoint = [...reportSummaries].sort((a, b) => a.snapshot.sessionsUntilNext - b.snapshot.sessionsUntilNext)[0] ?? null;
-
-
-
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
@@ -112,6 +162,73 @@ export default function TeacherDetailsPage({ params }: { params: Promise<{ id: s
         <div>
           <h1 className="text-2xl font-bold text-foreground">{teacher.fullName}</h1>
           <p className="text-sm text-muted-foreground">{getEmploymentTypeLabel(teacher.employment, locale)}</p>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-brand-200 bg-brand-50/50 p-4 dark:border-brand-900/50 dark:bg-brand-950/20">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-sm font-bold text-foreground">{t(locale, "نقل ارتباطات المدرس", "Teacher reassignment")}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t(
+                locale,
+                "إذا أردت حذف المدرس، انقل الحصص المرتبطة أولًا إلى مدرس آخر ثم احذف الملف بأمان.",
+                "If you want to delete this teacher, reassign linked sessions first, then delete the profile safely.",
+              )}
+            </p>
+          </div>
+          <div className="grid w-full gap-3 lg:max-w-xl lg:grid-cols-[minmax(0,1fr)_auto]">
+            <select
+              value={reassignTo}
+              onChange={(event) => setReassignTo(event.target.value)}
+              className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground focus:border-transparent focus:ring-2 focus:ring-ring"
+            >
+              {candidates.length === 0 ? (
+                <option value="">{t(locale, "لا يوجد مدرس آخر نشط", "No other active teacher")}</option>
+              ) : (
+                candidates.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.fullName}
+                  </option>
+                ))
+              )}
+            </select>
+            <button
+              type="button"
+              onClick={handleReassignTeacher}
+              disabled={reassigning || !reassignTo || !hasBlockingSessions}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCcw size={16} />
+              {reassigning ? t(locale, "جارِ النقل...", "Reassigning...") : t(locale, "نقل الحصص لهذا المدرس", "Reassign sessions")}
+            </button>
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+          <span className="rounded-full bg-background px-3 py-1">{t(locale, "حصص مرتبطة", "Linked sessions")}: {teacher.linkedSessions.length}</span>
+          <span className="rounded-full bg-background px-3 py-1">{t(locale, "طلاب ظاهرون في الملف", "Visible students")}: {teacher.linkedStudents.length}</span>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-red-200 bg-red-50/70 p-4 dark:border-red-900/50 dark:bg-red-950/20">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-sm font-bold text-foreground">{t(locale, "حذف المدرس", "Delete teacher")}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {hasBlockingSessions
+                ? t(locale, "انقل الحصص المرتبطة أولًا ثم احذف المدرس.", "Reassign linked sessions first, then delete the teacher.")
+                : t(locale, "سيتم حذف المدرس نهائيًا من النظام.", "The teacher will be permanently removed from the system.")}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleDeleteTeacher}
+            disabled={deleting || hasBlockingSessions}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-900/50 dark:bg-transparent dark:text-red-300 dark:hover:bg-red-950/30"
+          >
+            <Trash2 size={16} />
+            {deleting ? t(locale, "جارِ الحذف...", "Deleting...") : t(locale, "حذف المدرس", "Delete teacher")}
+          </button>
         </div>
       </div>
 
@@ -126,8 +243,6 @@ export default function TeacherDetailsPage({ params }: { params: Promise<{ id: s
             <Metric label={t(locale, "الكلاسات الحالية", "Current classes")} value={teacher.classesCount.toString()} />
             <Metric label={t(locale, "إجمالي الطلاب", "Total students")} value={teacher.studentsCount.toString()} />
           </div>
-
-
 
           <div className="mt-6 flex flex-wrap gap-2">
             <Link href={`/schedule/new?teacherId=${teacher.id}${teacher.specialization[0] ? `&course=${teacher.specialization[0]}` : ""}`} className="rounded-xl bg-brand-600 px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90">
@@ -244,9 +359,9 @@ export default function TeacherDetailsPage({ params }: { params: Promise<{ id: s
                     <p className="mt-2 text-[11px] text-brand-700 dark:text-brand-300">{t(locale, "افتح تقرير الطالب من الملف", "Open the student report from the profile")}</p>
                   </div>
                   <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">{student.parentName}</span>
-                  <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">{buildStudentReportSnapshot(student as TeacherLinkedStudentForReport).ready ? t(locale, "تقرير جاهز", "Report ready") : t(locale, "قيد المتابعة", "In progress")}</span>
-                </div>
+                    <span className="text-xs text-muted-foreground">{student.parentName}</span>
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">{buildStudentReportSnapshot(student as TeacherLinkedStudentForReport).ready ? t(locale, "تقرير جاهز", "Report ready") : t(locale, "قيد المتابعة", "In progress")}</span>
+                  </div>
                 </Link>
               ))}
             </div>
