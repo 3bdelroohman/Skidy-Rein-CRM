@@ -138,8 +138,6 @@ export async function createTeacher(input: CreateTeacherInput): Promise<TeacherL
     email: input.email?.trim() || null,
     employment: input.employment,
     specialization: input.specialization,
-    classes_count: 0,
-    students_count: 0,
     is_active: input.isActive ?? true,
     created_at: new Date().toISOString(),
   };
