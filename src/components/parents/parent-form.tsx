@@ -1,11 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Save, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { t } from "@/lib/locale";
-import { guardParentDuplicate } from "@/services/duplicate-guard.service";
+import { guardParentDuplicate, type DuplicateCheckResult } from "@/services/duplicate-guard.service";
 import { useUIStore } from "@/stores/ui-store";
 import { getCourseFamilyFromTrack, getCourseTrackGroups, getCourseTrackLabel, getCourseTrackOptions, getDefaultTrackIdForFamily, suggestCourseByAge } from "@/config/course-roadmap";
 import type { CreateParentInput } from "@/types/crm";
@@ -43,6 +43,7 @@ export function ParentForm({
   const locale = useUIStore((state) => state.locale);
   const isAr = locale === "ar";
   const [loading, setLoading] = useState(false);
+  const [duplicateResult, setDuplicateResult] = useState<DuplicateCheckResult | null>(null);
   const [form, setForm] = useState({
     fullName: initialValues?.fullName ?? "",
     phone: initialValues?.phone ?? "",
@@ -57,6 +58,29 @@ export function ParentForm({
 
   const trackOptions = useMemo(() => getCourseTrackOptions(locale), [locale]);
   const trackGroups = useMemo(() => getCourseTrackGroups(locale), [locale]);
+
+  useEffect(() => {
+    const hasEnoughData = form.fullName.trim().length > 1 && (form.phone.trim().length > 5 || form.whatsapp.trim().length > 5);
+    if (!hasEnoughData) {
+      setDuplicateResult(null);
+      return;
+    }
+
+    let cancelled = false;
+    const timeout = window.setTimeout(async () => {
+      const result = await guardParentDuplicate({
+        fullName: form.fullName.trim(),
+        phone: form.phone.trim(),
+        whatsapp: form.whatsapp.trim() || undefined,
+      });
+      if (!cancelled) setDuplicateResult(result);
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [form.fullName, form.phone, form.whatsapp]);
 
   const updateField = (field: keyof typeof form, value: string) => {
     setForm((prev) => {
@@ -138,6 +162,12 @@ export function ParentForm({
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="rounded-2xl border border-border bg-card p-5">
+          {duplicateResult?.blocking ? (
+            <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <p className="font-semibold">{t(locale, "تنبيه تكرار محتمل", "Potential duplicate warning")}</p>
+              <p className="mt-1">{t(locale, duplicateResult.messageAr, duplicateResult.messageEn)}</p>
+            </div>
+          ) : null}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField label={t(locale, "اسم ولي الأمر *", "Parent name *")} value={form.fullName} onChange={(value) => updateField("fullName", value)} placeholder={t(locale, "مثال: أحمد محمد", "Example: Ahmed Mohamed")} />
             <FormField label={t(locale, "رقم الهاتف *", "Phone number *")} value={form.phone} onChange={(value) => updateField("phone", value)} placeholder="01012345678" type="tel" />

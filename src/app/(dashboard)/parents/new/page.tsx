@@ -73,6 +73,7 @@ export default function NewParentPage() {
         firstStudentName: searchParams.get("firstStudentName") ?? undefined,
         firstStudentAge: searchParams.get("firstStudentAge") ? Number(searchParams.get("firstStudentAge")) : undefined,
         firstStudentCourse: (searchParams.get("currentCourse") as CreateParentInput["firstStudentCourse"] | null) ?? undefined,
+        firstStudentClassName: searchParams.get("className") ?? undefined,
       }}
     />
   );

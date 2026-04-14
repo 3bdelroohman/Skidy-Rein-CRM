@@ -1,13 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, GraduationCap, Save } from "lucide-react";
 import { toast } from "sonner";
-import { getCourseFamilyFromTrack, getCourseTrackGroups, getCourseTrackLabel, getCourseTrackOptions, suggestCourseByAge } from "@/config/course-roadmap";
+import { getCourseFamilyFromTrack, getCourseTrackGroups, getCourseTrackLabel, getCourseTrackOptions, getDefaultTrackIdForFamily, suggestCourseByAge } from "@/config/course-roadmap";
 import { STUDENT_STATUS_META, getMetaLabel } from "@/config/status-meta";
 import { t } from "@/lib/locale";
-import { guardStudentDuplicate } from "@/services/duplicate-guard.service";
+import { guardStudentDuplicate, type DuplicateCheckResult } from "@/services/duplicate-guard.service";
 import { useUIStore } from "@/stores/ui-store";
 import type { CourseType, StudentStatus } from "@/types/common.types";
 import type { CreateStudentInput } from "@/types/crm";
@@ -43,12 +43,13 @@ export function StudentForm({
   const locale = useUIStore((state) => state.locale);
   const isAr = locale === "ar";
   const [loading, setLoading] = useState(false);
+  const [duplicateResult, setDuplicateResult] = useState<DuplicateCheckResult | null>(null);
   const [form, setForm] = useState({
     fullName: initialValues?.fullName ?? "",
     age: initialValues?.age ? String(initialValues.age) : "",
     parentName: initialValues?.parentName ?? "",
     parentPhone: initialValues?.parentPhone ?? "",
-    selectedTrackId: "",
+    selectedTrackId: getDefaultTrackIdForFamily(initialValues?.currentCourse ?? null),
     status: initialValues?.status ?? ("active" as StudentStatus),
     className: initialValues?.className ?? "",
     hasPriorExperience: false,
@@ -82,6 +83,29 @@ export function StudentForm({
       return next;
     });
   };
+
+  useEffect(() => {
+    const hasEnoughData = form.fullName.trim().length > 1 && form.parentName.trim().length > 1 && form.parentPhone.trim().length > 5;
+    if (!hasEnoughData) {
+      setDuplicateResult(null);
+      return;
+    }
+
+    let cancelled = false;
+    const timeout = window.setTimeout(async () => {
+      const result = await guardStudentDuplicate({
+        fullName: form.fullName.trim(),
+        parentName: form.parentName.trim(),
+        parentPhone: form.parentPhone.trim(),
+      });
+      if (!cancelled) setDuplicateResult(result);
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [form.fullName, form.parentName, form.parentPhone]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -148,6 +172,12 @@ export function StudentForm({
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="rounded-2xl border border-border bg-card p-5">
+          {duplicateResult?.blocking ? (
+            <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <p className="font-semibold">{t(locale, "تنبيه تكرار محتمل", "Potential duplicate warning")}</p>
+              <p className="mt-1">{t(locale, duplicateResult.messageAr, duplicateResult.messageEn)}</p>
+            </div>
+          ) : null}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField label={t(locale, "اسم الطالب *", "Student name *")} value={form.fullName} onChange={(value) => updateField("fullName", value)} placeholder={t(locale, "مثال: يوسف", "Example: Youssef")} />
             <FormField label={t(locale, "العمر *", "Age *")} value={form.age} onChange={(value) => updateField("age", value)} placeholder="10" type="number" min={4} max={18} />

@@ -21,7 +21,7 @@ import {
 } from "@/config/labels";
 import { MOCK_TEAM } from "@/lib/mock-data";
 import { t } from "@/lib/locale";
-import { guardLeadDuplicate } from "@/services/duplicate-guard.service";
+import { guardLeadDuplicate, type DuplicateCheckResult } from "@/services/duplicate-guard.service";
 import { getCourseFamilyFromTrack, getCourseTrackGroups, getCourseTrackLabel, getCourseTrackOptions, getDefaultTrackIdForFamily, suggestCourseByAge } from "@/config/course-roadmap";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui-store";
@@ -83,6 +83,7 @@ export function LeadForm({
   const locale = useUIStore((state) => state.locale);
   const isAr = locale === "ar";
   const [loading, setLoading] = useState(false);
+  const [duplicateResult, setDuplicateResult] = useState<DuplicateCheckResult | null>(null);
   const [selectedTrackId, setSelectedTrackId] = useState<string>(
     getDefaultTrackIdForFamily(initialValues?.suggestedCourse ? initialValues.suggestedCourse : null),
   );
@@ -99,6 +100,30 @@ export function LeadForm({
     });
     setSelectedTrackId(getDefaultTrackIdForFamily(initialValues.suggestedCourse ? initialValues.suggestedCourse : null));
   }, [initialValues]);
+
+  useEffect(() => {
+    const hasEnoughData = form.childName.trim().length > 1 && form.parentName.trim().length > 1 && form.parentPhone.trim().length > 5;
+    if (!hasEnoughData) {
+      setDuplicateResult(null);
+      return;
+    }
+
+    let cancelled = false;
+    const timeout = window.setTimeout(async () => {
+      const result = await guardLeadDuplicate({
+        childName: form.childName.trim(),
+        parentName: form.parentName.trim(),
+        parentPhone: form.parentPhone.trim(),
+        parentWhatsapp: form.parentWhatsapp.trim() || undefined,
+      });
+      if (!cancelled) setDuplicateResult(result);
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [form.childName, form.parentName, form.parentPhone, form.parentWhatsapp]);
 
   const sourceOptions = useMemo(
     () => Object.entries(isAr ? LEAD_SOURCE_LABELS : LEAD_SOURCE_EN_LABELS).map(([value, label]) => ({ value: value as LeadSource, label })),
@@ -226,6 +251,12 @@ export function LeadForm({
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="rounded-2xl border border-border bg-card p-5">
+          {duplicateResult?.blocking ? (
+            <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <p className="font-semibold">{t(locale, "تنبيه تكرار محتمل", "Potential duplicate warning")}</p>
+              <p className="mt-1">{t(locale, duplicateResult.messageAr, duplicateResult.messageEn)}</p>
+            </div>
+          ) : null}
           <h3 className="mb-4 flex items-center gap-2 font-bold text-foreground">
             <Baby size={18} className="text-brand-600" />
             {t(locale, "معلومات الطفل", "Child information")}
@@ -260,6 +291,12 @@ export function LeadForm({
         </div>
 
         <div className="rounded-2xl border border-border bg-card p-5">
+          {duplicateResult?.blocking ? (
+            <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <p className="font-semibold">{t(locale, "تنبيه تكرار محتمل", "Potential duplicate warning")}</p>
+              <p className="mt-1">{t(locale, duplicateResult.messageAr, duplicateResult.messageEn)}</p>
+            </div>
+          ) : null}
           <h3 className="mb-4 flex items-center gap-2 font-bold text-foreground">
             <User size={18} className="text-brand-600" />
             {t(locale, "ولي الأمر", "Parent")}
@@ -274,6 +311,12 @@ export function LeadForm({
         </div>
 
         <div className="rounded-2xl border border-border bg-card p-5">
+          {duplicateResult?.blocking ? (
+            <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <p className="font-semibold">{t(locale, "تنبيه تكرار محتمل", "Potential duplicate warning")}</p>
+              <p className="mt-1">{t(locale, duplicateResult.messageAr, duplicateResult.messageEn)}</p>
+            </div>
+          ) : null}
           <h3 className="mb-4 flex items-center gap-2 font-bold text-foreground">
             <Thermometer size={18} className="text-brand-600" />
             {t(locale, "معلومات البيع", "Sales details")}
