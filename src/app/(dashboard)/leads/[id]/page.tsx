@@ -10,10 +10,13 @@ import {
   CalendarPlus2,
   CheckCircle2,
   Clock,
+  CreditCard,
   Edit,
+  GraduationCap,
   MessageSquare,
   RotateCcw,
   User,
+  UserRound,
 } from "lucide-react";
 import { toast } from "sonner";
 import { StageBadge } from "@/components/leads/stage-badge";
@@ -82,6 +85,30 @@ export default function LeadDetailsPage({ params }: { params: Promise<{ id: stri
 
   const currentStageConfig = useMemo(() => (lead ? STAGE_CONFIGS[lead.stage] : null), [lead]);
   const nextStages = useMemo(() => (lead ? NEXT_STAGE_MAP[lead.stage] ?? [] : []), [lead]);
+
+  const parentCreateHref = useMemo(() => {
+    if (!lead) return "/parents/new";
+    const params = new URLSearchParams({
+      parentName: lead.parentName,
+      parentPhone: lead.parentPhone,
+      firstStudentName: lead.childName,
+      firstStudentAge: String(lead.childAge),
+    });
+    if (lead.suggestedCourse) params.set("currentCourse", lead.suggestedCourse);
+    return `/parents/new?${params.toString()}`;
+  }, [lead]);
+
+  const studentCreateHref = useMemo(() => {
+    if (!lead) return "/students/new";
+    const params = new URLSearchParams({
+      parentName: lead.parentName,
+      parentPhone: lead.parentPhone,
+      childName: lead.childName,
+      childAge: String(lead.childAge),
+    });
+    if (lead.suggestedCourse) params.set("currentCourse", lead.suggestedCourse);
+    return `/students/new?${params.toString()}`;
+  }, [lead]);
 
   useEffect(() => {
     if (!lead) return;
@@ -416,6 +443,33 @@ export default function LeadDetailsPage({ params }: { params: Promise<{ id: stri
               <InfoRow label={t(locale, "آخر تواصل", "Last contact")} value={formatDate(lead.lastContactAt, locale)} align={isAr ? "left" : "right"} />
               <InfoRow label={t(locale, "المتابعة القادمة", "Next follow-up")} value={formatDateTime(lead.nextFollowUpAt, locale)} align={isAr ? "left" : "right"} />
             </div>
+          </div>
+
+          <div className="rounded-2xl border border-border bg-card p-4">
+            <h3 className="mb-3 font-bold text-foreground">{t(locale, "تحويل وتشغيل", "Conversion and operations")}</h3>
+            <div className="grid grid-cols-1 gap-2">
+              <Link href={parentCreateHref} className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted">
+                <UserRound size={16} />
+                {t(locale, "إنشاء ولي أمر", "Create parent")}
+              </Link>
+              <Link href={studentCreateHref} className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted">
+                <GraduationCap size={16} />
+                {t(locale, "إنشاء طالب", "Create student")}
+              </Link>
+              <Link href={studentCreateHref} className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted">
+                <CalendarPlus2 size={16} />
+                {t(locale, "إنشاء طالب مع تجهيز الحصة لاحقًا", "Create student then schedule")}
+              </Link>
+              <Link href={`/payments/new?studentName=${encodeURIComponent(lead.childName)}`} className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted">
+                <CreditCard size={16} />
+                {t(locale, "إضافة دفعة لهذا الطفل", "Add payment for this child")}
+              </Link>
+            </div>
+            <p className="mt-3 text-xs leading-5 text-muted-foreground">
+              {lead.stage === "won"
+                ? t(locale, "هذا العميل في مرحلة مشترك، ويمكنك الآن إنشاء ملف ولي أمر أو طالب حقيقي من نفس البيانات الحالية.", "This lead is won, so you can now create a real parent or student record from the same data.")
+                : t(locale, "يمكنك تجهيز سجلات ولي الأمر والطالب من الآن، لكن الأفضل جعل المرحلة مشترك أولًا حتى تبقى الرحلة متسقة.", "You can prepare parent and student records now, but it is better to move the lead to won first for a cleaner journey.")}
+            </p>
           </div>
 
           <div className="rounded-2xl border border-border bg-card p-4">

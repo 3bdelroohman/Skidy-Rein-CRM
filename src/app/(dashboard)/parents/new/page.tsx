@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ParentForm } from "@/components/parents/parent-form";
 import { createParent, listParents } from "@/services/parents.service";
 import { createStudent, listStudents } from "@/services/students.service";
@@ -16,6 +16,7 @@ function normalizeName(value: string | null | undefined): string {
 
 export default function NewParentPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const handleSubmit = async (payload: CreateParentInput) => {
     const parents = await listParents();
@@ -65,6 +66,14 @@ export default function NewParentPage() {
       successMessage="تم إنشاء سجل ولي الأمر بنجاح"
       onSubmit={handleSubmit}
       cancelHref="/parents"
+      initialValues={{
+        fullName: searchParams.get("parentName") ?? undefined,
+        phone: searchParams.get("parentPhone") ?? undefined,
+        whatsapp: searchParams.get("parentWhatsapp") ?? undefined,
+        firstStudentName: searchParams.get("firstStudentName") ?? undefined,
+        firstStudentAge: searchParams.get("firstStudentAge") ? Number(searchParams.get("firstStudentAge")) : undefined,
+        firstStudentCourse: (searchParams.get("currentCourse") as CreateParentInput["firstStudentCourse"] | null) ?? undefined,
+      }}
     />
   );
 }

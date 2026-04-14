@@ -1,15 +1,7 @@
 import type { Metadata } from "next";
-import { Cairo } from "next/font/google";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { Toaster } from "sonner";
 import "./globals.css";
-
-const cairo = Cairo({
-  subsets: ["arabic", "latin"],
-  variable: "--font-cairo-var",
-  display: "swap",
-  weight: ["400", "500", "600", "700", "800"],
-});
 
 export const metadata: Metadata = {
   title: {
@@ -28,7 +20,6 @@ export default function RootLayout({
     <html
       lang="ar"
       dir="rtl"
-      className={cairo.variable}
       suppressHydrationWarning
     >
       <body className="min-h-screen bg-background text-foreground antialiased font-cairo">

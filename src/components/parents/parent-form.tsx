@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { t } from "@/lib/locale";
 import { guardParentDuplicate } from "@/services/duplicate-guard.service";
 import { useUIStore } from "@/stores/ui-store";
-import { getCourseFamilyFromTrack, getCourseTrackGroups, getCourseTrackLabel, getCourseTrackOptions, suggestCourseByAge } from "@/config/course-roadmap";
+import { getCourseFamilyFromTrack, getCourseTrackGroups, getCourseTrackLabel, getCourseTrackOptions, getDefaultTrackIdForFamily, suggestCourseByAge } from "@/config/course-roadmap";
 import type { CreateParentInput } from "@/types/crm";
 
 interface ParentFormProps {
@@ -17,6 +17,17 @@ interface ParentFormProps {
   successMessage: string;
   onSubmit: (payload: CreateParentInput) => Promise<void>;
   cancelHref?: string;
+  initialValues?: Partial<{
+    fullName: string;
+    phone: string;
+    whatsapp: string;
+    email: string;
+    city: string;
+    firstStudentName: string;
+    firstStudentAge: number;
+    firstStudentCourse: CreateParentInput["firstStudentCourse"];
+    firstStudentClassName: string;
+  }>;
 }
 
 export function ParentForm({
@@ -26,21 +37,22 @@ export function ParentForm({
   successMessage,
   onSubmit,
   cancelHref = "/parents",
+  initialValues,
 }: ParentFormProps) {
   const router = useRouter();
   const locale = useUIStore((state) => state.locale);
   const isAr = locale === "ar";
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
-    fullName: "",
-    phone: "",
-    whatsapp: "",
-    email: "",
-    city: "",
-    firstStudentName: "",
-    firstStudentAge: "",
-    firstStudentTrackId: "",
-    firstStudentClassName: "",
+    fullName: initialValues?.fullName ?? "",
+    phone: initialValues?.phone ?? "",
+    whatsapp: initialValues?.whatsapp ?? "",
+    email: initialValues?.email ?? "",
+    city: initialValues?.city ?? "",
+    firstStudentName: initialValues?.firstStudentName ?? "",
+    firstStudentAge: initialValues?.firstStudentAge ? String(initialValues.firstStudentAge) : "",
+    firstStudentTrackId: getDefaultTrackIdForFamily(initialValues?.firstStudentCourse ?? null),
+    firstStudentClassName: initialValues?.firstStudentClassName ?? "",
   });
 
   const trackOptions = useMemo(() => getCourseTrackOptions(locale), [locale]);

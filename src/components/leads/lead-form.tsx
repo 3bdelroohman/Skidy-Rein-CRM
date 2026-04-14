@@ -14,8 +14,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  COURSE_TYPE_EN_LABELS,
-  COURSE_TYPE_LABELS,
   LEAD_SOURCE_EN_LABELS,
   LEAD_SOURCE_LABELS,
   TEMPERATURE_EN_LABELS,
@@ -23,6 +21,8 @@ import {
 } from "@/config/labels";
 import { MOCK_TEAM } from "@/lib/mock-data";
 import { t } from "@/lib/locale";
+import { guardLeadDuplicate } from "@/services/duplicate-guard.service";
+import { getCourseFamilyFromTrack, getCourseTrackGroups, getCourseTrackLabel, getCourseTrackOptions, getDefaultTrackIdForFamily, suggestCourseByAge } from "@/config/course-roadmap";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui-store";
 import type { CreateLeadInput } from "@/types/crm";
@@ -83,6 +83,7 @@ export function LeadForm({
   const locale = useUIStore((state) => state.locale);
   const isAr = locale === "ar";
   const [loading, setLoading] = useState(false);
+  const [selectedTrackId, setSelectedTrackId] = useState<string>(getDefaultTrackIdForFamily(initialValues?.suggestedCourse ?? null));
   const [form, setForm] = useState<LeadFormValues>({
     ...DEFAULT_VALUES,
     ...initialValues,
@@ -94,6 +95,7 @@ export function LeadForm({
       ...DEFAULT_VALUES,
       ...initialValues,
     });
+    setSelectedTrackId(getDefaultTrackIdForFamily(initialValues.suggestedCourse ?? null));
   }, [initialValues]);
 
   const sourceOptions = useMemo(
@@ -101,10 +103,8 @@ export function LeadForm({
     [isAr],
   );
 
-  const courseOptions = useMemo(
-    () => Object.entries(isAr ? COURSE_TYPE_LABELS : COURSE_TYPE_EN_LABELS).map(([value, label]) => ({ value: value as CourseType, label })),
-    [isAr],
-  );
+  const trackOptions = useMemo(() => getCourseTrackOptions(locale), [locale]);
+  const trackGroups = useMemo(() => getCourseTrackGroups(locale), [locale]);
 
   const temperatureOptions = useMemo(
     () => Object.entries(isAr ? TEMPERATURE_LABELS : TEMPERATURE_EN_LABELS).map(([value, label]) => ({ value: value as LeadTemperature, label })),
@@ -114,15 +114,39 @@ export function LeadForm({
   const salesTeam = useMemo(() => MOCK_TEAM.filter((member) => member.role === "sales"), []);
 
   const updateField = (field: keyof LeadFormValues, value: string | boolean) => {
-    setForm((prev) => {
-      const next = { ...prev, [field]: value } as LeadFormValues;
-      if (field === "childAge") {
-        const age = parseInt(value as string, 10);
-        if (age >= 8 && age <= 12) next.suggestedCourse = "scratch";
-        else if (age > 12) next.suggestedCourse = "python";
+    if (field === "childAge") {
+      const ageValue = value as string;
+      const age = parseInt(ageValue, 10);
+      if (!Number.isNaN(age) && !selectedTrackId) {
+        const family = suggestCourseByAge(age, form.hasPriorExperience);
+        const suggestedTrack = trackOptions.find((item) => item.family === family)?.value ?? "";
+        setSelectedTrackId(suggestedTrack);
+        setForm((prev) => ({ ...prev, childAge: ageValue, suggestedCourse: family }));
+        return;
       }
-      return next;
-    });
+    }
+
+    if (field === "hasPriorExperience") {
+      const hasPriorExperience = Boolean(value);
+      const age = parseInt(form.childAge, 10);
+      if (!Number.isNaN(age) && !selectedTrackId) {
+        const family = suggestCourseByAge(age, hasPriorExperience);
+        const suggestedTrack = trackOptions.find((item) => item.family === family)?.value ?? "";
+        setSelectedTrackId(suggestedTrack);
+        setForm((prev) => ({ ...prev, hasPriorExperience, suggestedCourse: family }));
+        return;
+      }
+    }
+
+    setForm((prev) => ({ ...prev, [field]: value } as LeadFormValues));
+  };
+
+  const handleTrackChange = (trackId: string) => {
+    setSelectedTrackId(trackId);
+    setForm((prev) => ({
+      ...prev,
+      suggestedCourse: (getCourseFamilyFromTrack(trackId) ?? "") as LeadFormValues["suggestedCourse"],
+    }));
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -136,6 +160,18 @@ export function LeadForm({
     const age = parseInt(form.childAge, 10);
     if (Number.isNaN(age) || age < 4 || age > 18) {
       toast.error(t(locale, "العمر يجب أن يكون بين 4 و 18 سنة", "Age must be between 4 and 18"));
+      return;
+    }
+
+    const duplicate = await guardLeadDuplicate({
+      childName: form.childName.trim(),
+      parentName: form.parentName.trim(),
+      parentPhone: form.parentPhone.trim(),
+      parentWhatsapp: form.parentWhatsapp.trim() || undefined,
+    });
+
+    if (duplicate?.blocking) {
+      toast.error(t(locale, duplicate.messageAr, duplicate.messageEn));
       return;
     }
 
@@ -196,7 +232,16 @@ export function LeadForm({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField label={t(locale, "اسم الطفل *", "Child name *")} value={form.childName} onChange={(value) => updateField("childName", value)} placeholder={t(locale, "مثال: يوسف", "Example: Youssef")} />
             <FormField label={t(locale, "العمر *", "Age *")} type="number" value={form.childAge} onChange={(value) => updateField("childAge", value)} placeholder="10" min={4} max={18} />
-            <FormSelect label={t(locale, "الكورس المقترح", "Suggested course")} value={form.suggestedCourse} onChange={(value) => updateField("suggestedCourse", value)} options={courseOptions} placeholder={t(locale, "يتحدد تلقائياً حسب العمر", "Auto-selected based on age")} />
+            <div className="space-y-2 sm:col-span-2">
+              <FormSelect
+                label={t(locale, "الكورس / المسار", "Course / track")}
+                value={selectedTrackId}
+                onChange={handleTrackChange}
+                options={trackGroups.flatMap((group) => group.options.map((option) => ({ value: option.value, label: option.label, group: group.label })))}
+                placeholder={t(locale, "اختر الكورس الأنسب", "Choose the most suitable course")}
+              />
+              {selectedTrackId ? <p className="text-xs leading-5 text-muted-foreground">{getCourseTrackLabel(selectedTrackId, locale)}</p> : null}
+            </div>
             <FormField label={t(locale, "اهتمامات الطفل", "Child interests")} value={form.childInterests} onChange={(value) => updateField("childInterests", value)} placeholder={t(locale, "ألعاب، برمجة، تصميم...", "Games, coding, design...")} />
 
             <div className="flex flex-wrap items-center gap-6 sm:col-span-2">
@@ -308,17 +353,34 @@ function FormSelect({
   label: string;
   value: string;
   onChange: (value: string) => void;
-  options: Array<{ value: string; label: string }>;
+  options: Array<{ value: string; label: string; group?: string }>;
   placeholder?: string;
 }) {
+  const grouped = options.reduce<Record<string, Array<{ value: string; label: string }>>>((acc, option) => {
+    const key = option.group ?? "";
+    if (!acc[key]) acc[key] = [];
+    acc[key].push({ value: option.value, label: option.label });
+    return acc;
+  }, {});
+
   return (
     <div>
       <label className="mb-1.5 block text-sm font-medium text-foreground">{label}</label>
       <select value={value} onChange={(event) => onChange(event.target.value)} className="w-full rounded-xl border border-input bg-muted/50 px-4 py-2.5 text-sm text-foreground focus:border-transparent focus:ring-2 focus:ring-ring">
         {placeholder ? <option value="">{placeholder}</option> : null}
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>{option.label}</option>
-        ))}
+        {Object.entries(grouped).map(([group, entries]) =>
+          group ? (
+            <optgroup key={group} label={group}>
+              {entries.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </optgroup>
+          ) : (
+            entries.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))
+          )
+        )}
       </select>
     </div>
   );
