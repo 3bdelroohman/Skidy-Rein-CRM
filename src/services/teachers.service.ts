@@ -155,19 +155,15 @@ export async function createTeacher(input: CreateTeacherInput): Promise<TeacherL
 
 export async function deleteTeacher(id: string): Promise<boolean> {
   const supabase = getSupabaseClient();
-  if (supabase) {
-    try {
-      const { error } = await supabase.from("teachers").delete().eq("id", id);
-      if (!error) {
-        saveLocalTeachers(getLocalTeachers().filter((teacher) => teacher.id !== id));
-        return true;
-      }
-    } catch {}
+  if (!supabase) {
+    throw new Error("تعذر الاتصال بقاعدة البيانات. أعد المحاولة بعد تسجيل الدخول أو التحقق من الإعدادات.");
   }
 
-  const current = getLocalTeachers();
-  const next = current.filter((teacher) => teacher.id !== id);
-  if (next.length === current.length) return false;
-  saveLocalTeachers(next);
+  const { error } = await supabase.from("teachers").delete().eq("id", id);
+  if (error) {
+    throw new Error(error.message || "تعذر حذف المدرس");
+  }
+
+  saveLocalTeachers(getLocalTeachers().filter((teacher) => teacher.id !== id));
   return true;
 }
