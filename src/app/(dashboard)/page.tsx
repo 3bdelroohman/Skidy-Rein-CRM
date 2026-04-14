@@ -24,6 +24,7 @@ import { DASHBOARD_TASK_STATUS_META } from "@/config/status-meta";
 import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/providers/user-provider";
 import { getDashboardOperationToneStyles, getDashboardOverview } from "@/services/dashboard.service";
+import { getOwnerSnapshot, type OwnerSnapshotItem } from "@/services/owner-summary.service";
 import { useUIStore } from "@/stores/ui-store";
 import { getConversionTerm, t } from "@/lib/locale";
 import type { DashboardActionItem, DashboardOverview, DashboardOperationItem } from "@/types/crm";
@@ -55,22 +56,24 @@ export default function DashboardPage() {
   const locale = useUIStore((state) => state.locale);
   const isAr = locale === "ar";
   const [overview, setOverview] = useState<DashboardOverview | null>(null);
+  const [ownerSnapshot, setOwnerSnapshot] = useState<OwnerSnapshotItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
     async function load() {
       setLoading(true);
-      const data = await getDashboardOverview(
+      const [data, ownerData] = await Promise.all([getDashboardOverview(
         {
           role: user.role,
           fullName: user.fullName,
           fullNameAr: user.fullNameAr,
         },
         locale,
-      );
+      ), getOwnerSnapshot()]);
       if (isMounted) {
         setOverview(data);
+        setOwnerSnapshot(ownerData.slice(0, 4));
         setLoading(false);
       }
     }
@@ -125,7 +128,9 @@ export default function DashboardPage() {
           <MiniStat icon={AlertCircle} value={urgentCount} label={t(locale, "عاجلة", "Urgent")} bg="#FEF2F2" color="#DC2626" />
         </div>
 
-        <DashboardSectionTitle title={t(locale, "وصول سريع", "Quick access")} />
+        <OwnershipSnapshot locale={locale} title={t(locale, "ملخص المسؤولين", "Owner snapshot")} items={ownerSnapshot} />
+
+                <DashboardSectionTitle title={t(locale, "وصول سريع", "Quick access")} />
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {quickLinks.map((link) => {
             const Icon = link.icon;
@@ -205,6 +210,8 @@ export default function DashboardPage() {
       </div>
 
       <OperationsGrid locale={locale} items={overview.operations} />
+
+      <OwnershipSnapshot locale={locale} title={t(locale, "توزيع المسؤولية", "Ownership distribution")} items={ownerSnapshot} />
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <div className="space-y-6">
@@ -401,4 +408,27 @@ function TaskCard({ locale, isAr, tasks, title, emptyLabel }: { locale: "ar" | "
 
 function EmptyPanel({ label }: { label: string }) {
   return <div className="rounded-2xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">{label}</div>;
+}
+
+
+function OwnershipSnapshot({ locale, title, items }: { locale: "ar" | "en"; title: string; items: OwnerSnapshotItem[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div className="rounded-2xl border border-border bg-card p-5">
+      <DashboardSectionTitle title={title} icon={Users} />
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {items.map((item) => (
+          <div key={item.key} className="rounded-2xl border border-border bg-background p-4">
+            <p className="text-sm font-semibold text-foreground">{item.displayName}</p>
+            <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+              <p>{t(locale, "عملاء محتملون", "Leads")}: <span className="font-semibold text-foreground">{item.leadCount}</span></p>
+              <p>{t(locale, "مشترك", "Won")}: <span className="font-semibold text-foreground">{item.wonLeadCount}</span></p>
+              <p>{t(locale, "أولياء أمور", "Parents")}: <span className="font-semibold text-foreground">{item.parentCount}</span></p>
+              <p>{t(locale, "طلاب", "Students")}: <span className="font-semibold text-foreground">{item.studentCount}</span></p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }

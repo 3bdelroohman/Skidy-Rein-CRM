@@ -55,6 +55,9 @@ export default function StudentsPage() {
     return map;
   }, [parents, students]);
 
+  const projectedCount = useMemo(() => students.filter((student) => Boolean(extractLeadIdFromProjectionId(student.id))).length, [students]);
+  const assignedOwnerCount = useMemo(() => students.filter((student) => Boolean(student.ownerName)).length, [students]);
+
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
     return students.filter((student) => {
@@ -78,6 +81,12 @@ export default function StudentsPage() {
           <Plus size={18} />
           {t(locale, "إضافة طالب", "Add student")}
         </Link>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <MetricCard title={t(locale, "إجمالي الطلاب", "Total students")} value={String(students.length)} />
+        <MetricCard title={t(locale, "من العملاء الحاليين", "From current customers")} value={String(projectedCount)} />
+        <MetricCard title={t(locale, "لهم مسؤول", "Assigned owner")} value={String(assignedOwnerCount)} />
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row">
@@ -111,6 +120,7 @@ export default function StudentsPage() {
                   <th className={cn("px-4 py-3 font-semibold text-muted-foreground", isAr ? "text-right" : "text-left")}>{t(locale, "الحالة", "Status")}</th>
                   <th className={cn("px-4 py-3 font-semibold text-muted-foreground", isAr ? "text-right" : "text-left")}>{t(locale, "الكورس", "Course")}</th>
                   <th className={cn("px-4 py-3 font-semibold text-muted-foreground", isAr ? "text-right" : "text-left")}>{t(locale, "الكلاس", "Class")}</th>
+                  <th className={cn("px-4 py-3 font-semibold text-muted-foreground", isAr ? "text-right" : "text-left")}>{t(locale, "المسؤول", "Owner")}</th>
                   <th className={cn("px-4 py-3 font-semibold text-muted-foreground", isAr ? "text-right" : "text-left")}>{t(locale, "الحضور", "Attendance")}</th>
                   <th className={cn("px-4 py-3 font-semibold text-muted-foreground", isAr ? "text-right" : "text-left")}>{t(locale, "المدفوع", "Paid")}</th>
                 </tr>
@@ -137,6 +147,7 @@ export default function StudentsPage() {
                       <td className="px-4 py-3"><span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: meta.bg, color: meta.color }}>{getMetaLabel(meta, locale)}</span></td>
                       <td className="px-4 py-3"><span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs text-brand-700 dark:bg-brand-950 dark:text-brand-300">{formatCourseLabel(student.currentCourse, locale)}</span></td>
                       <td className="px-4 py-3 text-xs text-foreground">{student.className ?? t(locale, "غير مسجل", "Not assigned")}</td>
+                      <td className="px-4 py-3 text-xs text-foreground">{student.ownerName ?? t(locale, "غير مخصص", "Unassigned")}</td>
                       <td className="px-4 py-3 text-foreground">{student.sessionsAttended} {t(locale, "حصة", "sessions")}</td>
                       <td className="px-4 py-3 font-semibold text-foreground">{formatCurrencyEgp(student.totalPaid, locale)}</td>
                     </tr>
@@ -148,6 +159,16 @@ export default function StudentsPage() {
           {!loading && filtered.length === 0 ? <EmptySearchState /> : null}
         </div>
       )}
+    </div>
+  );
+}
+
+
+function MetricCard({ title, value }: { title: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-border bg-card p-4">
+      <p className="text-xs font-semibold text-muted-foreground">{title}</p>
+      <p className="mt-2 text-2xl font-bold text-foreground">{value}</p>
     </div>
   );
 }

@@ -6,7 +6,7 @@ import { MessageCircle, Plus, Search, Users } from "lucide-react";
 import { useUIStore } from "@/stores/ui-store";
 import { t } from "@/lib/locale";
 import { cn } from "@/lib/utils";
-import { listParentsWithRelations } from "@/services/relations.service";
+import { extractLeadIdFromProjectionId, listParentsWithRelations } from "@/services/relations.service";
 import type { ParentListItem } from "@/types/crm";
 import { EmptySearchState, LoadingState } from "@/components/shared/page-state";
 
@@ -32,6 +32,9 @@ export default function ParentsPage() {
       isMounted = false;
     };
   }, []);
+
+  const projectedCount = useMemo(() => parents.filter((parent) => Boolean(extractLeadIdFromProjectionId(parent.id))).length, [parents]);
+  const assignedOwnerCount = useMemo(() => parents.filter((parent) => Boolean(parent.ownerName)).length, [parents]);
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -61,6 +64,12 @@ export default function ParentsPage() {
         </Link>
       </div>
 
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <MetricCard title={t(locale, "إجمالي أولياء الأمور", "Total parents")} value={String(parents.length)} />
+        <MetricCard title={t(locale, "من العملاء الحاليين", "From current customers")} value={String(projectedCount)} />
+        <MetricCard title={t(locale, "لهم مسؤول", "Assigned owner")} value={String(assignedOwnerCount)} />
+      </div>
+
       <div className="relative max-w-md">
         <Search size={18} className={cn("absolute top-1/2 -translate-y-1/2 text-muted-foreground", isAr ? "right-3" : "left-3")} />
         <input type="text" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t(locale, "بحث بالاسم أو الهاتف أو اسم الطفل", "Search by name, phone, or child name")} className={cn("w-full rounded-xl border border-border bg-card py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-ring", isAr ? "pr-10 pl-4" : "pl-10 pr-4")} />
@@ -79,8 +88,12 @@ export default function ParentsPage() {
             <Link key={parent.id} href={`/parents/${parent.id}`} className="rounded-2xl border border-border bg-card p-4 transition-all hover:-translate-y-0.5 hover:shadow-brand-md">
               <div className="mb-3 flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-bold text-foreground">{parent.fullName}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-bold text-foreground">{parent.fullName}</p>
+                    {extractLeadIdFromProjectionId(parent.id) ? <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">{t(locale, "من العملاء الحاليين", "From current customers")}</span> : null}
+                  </div>
                   <p className="mt-1 text-xs text-muted-foreground">{parent.phone}</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">{t(locale, "المسؤول", "Owner")}: {parent.ownerName ?? t(locale, "غير مخصص", "Unassigned")}</p>
                 </div>
                 {parent.whatsapp ? <span className="rounded-full bg-success-50 px-2 py-0.5 text-[10px] font-semibold text-success-600">WhatsApp</span> : null}
               </div>
@@ -118,6 +131,16 @@ export default function ParentsPage() {
           {!loading && filtered.length === 0 ? <div className="col-span-full"><EmptySearchState /></div> : null}
         </div>
       )}
+    </div>
+  );
+}
+
+
+function MetricCard({ title, value }: { title: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-border bg-card p-4">
+      <p className="text-xs font-semibold text-muted-foreground">{title}</p>
+      <p className="mt-2 text-2xl font-bold text-foreground">{value}</p>
     </div>
   );
 }
