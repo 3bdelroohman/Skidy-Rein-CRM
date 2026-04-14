@@ -83,7 +83,9 @@ export function LeadForm({
   const locale = useUIStore((state) => state.locale);
   const isAr = locale === "ar";
   const [loading, setLoading] = useState(false);
-  const [selectedTrackId, setSelectedTrackId] = useState<string>(getDefaultTrackIdForFamily(initialValues?.suggestedCourse ?? null));
+  const [selectedTrackId, setSelectedTrackId] = useState<string>(
+    getDefaultTrackIdForFamily(initialValues?.suggestedCourse ? initialValues.suggestedCourse : null),
+  );
   const [form, setForm] = useState<LeadFormValues>({
     ...DEFAULT_VALUES,
     ...initialValues,
@@ -95,7 +97,7 @@ export function LeadForm({
       ...DEFAULT_VALUES,
       ...initialValues,
     });
-    setSelectedTrackId(getDefaultTrackIdForFamily(initialValues.suggestedCourse ?? null));
+    setSelectedTrackId(getDefaultTrackIdForFamily(initialValues.suggestedCourse ? initialValues.suggestedCourse : null));
   }, [initialValues]);
 
   const sourceOptions = useMemo(
