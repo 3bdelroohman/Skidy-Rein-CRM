@@ -357,7 +357,6 @@ export async function createScheduleEntry(input: CreateScheduleEntryInput): Prom
   const payload: Database["public"]["Tables"]["classes"]["Insert"] = {
     name: input.className,
     teacher_id: input.teacherId,
-    day_of_week: input.day,
     start_time: input.startTime,
     end_time: input.endTime,
     is_active: true,
