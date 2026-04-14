@@ -2,14 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { GraduationCap, Search } from "lucide-react";
+import { GraduationCap, Plus, Search } from "lucide-react";
 import { useUIStore } from "@/stores/ui-store";
 import { getFilterLabel, t } from "@/lib/locale";
 import { STUDENT_STATUS_META, getMetaLabel } from "@/config/status-meta";
 import { formatCourseLabel, formatCurrencyEgp } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
-import { listStudents } from "@/services/students.service";
-import { listParentsWithRelations } from "@/services/relations.service";
+import { listParentsWithRelations, listStudentsWithRelations, extractLeadIdFromProjectionId } from "@/services/relations.service";
 import type { ParentListItem, StudentListItem } from "@/types/crm";
 import type { StudentStatus } from "@/types/common.types";
 import { EmptySearchState, LoadingState } from "@/components/shared/page-state";
@@ -31,7 +30,7 @@ export default function StudentsPage() {
     let isMounted = true;
     async function load() {
       setLoading(true);
-      const [studentData, parentData] = await Promise.all([listStudents(), listParentsWithRelations()]);
+      const [studentData, parentData] = await Promise.all([listStudentsWithRelations(), listParentsWithRelations()]);
       if (isMounted) {
         setStudents(studentData);
         setParents(parentData);
@@ -67,12 +66,18 @@ export default function StudentsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
         <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
           <GraduationCap size={28} className="text-brand-600" />
           {t(locale, "الطلاب", "Students")}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">{t(locale, "رؤية أوضح للطلاب الحاليين وربطهم بأولياء الأمور والكلاسات", "A clearer view of current students and their parent and class relationships")}</p>
+        </div>
+        <Link href="/students/new" className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600">
+          <Plus size={18} />
+          {t(locale, "إضافة طالب", "Add student")}
+        </Link>
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row">
@@ -114,11 +119,15 @@ export default function StudentsPage() {
                 {filtered.map((student) => {
                   const meta = STUDENT_STATUS_META[student.status];
                   const parent = parentMap.get(student.id);
+                  const isProjected = Boolean(extractLeadIdFromProjectionId(student.id));
                   return (
                     <tr key={student.id} className="border-b border-border last:border-0 transition-colors hover:bg-muted/30">
                       <td className="px-4 py-3">
                         <Link href={`/students/${student.id}`} className="group block">
-                          <p className="font-semibold text-foreground transition-colors group-hover:text-brand-600">{student.fullName}</p>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-semibold text-foreground transition-colors group-hover:text-brand-600">{student.fullName}</p>
+                            {isProjected ? <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">{t(locale, "من العملاء الحاليين", "From current customers")}</span> : null}
+                          </div>
                           <p className="text-xs text-muted-foreground">{student.age} {t(locale, "سنة", "years")}</p>
                         </Link>
                       </td>
