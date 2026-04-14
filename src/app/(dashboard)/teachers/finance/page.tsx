@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight, Calculator, Wallet } from "lucide-react";
+import { ArrowLeft, ArrowRight, Calculator, PlusCircle, Wallet } from "lucide-react";
 import { useUIStore } from "@/stores/ui-store";
 import { t } from "@/lib/locale";
 import { formatCurrencyEgp } from "@/lib/formatters";
@@ -74,10 +74,11 @@ export default function TeachersFinancePage() {
         <Link href="/teachers" className="rounded-xl p-2 text-muted-foreground transition-colors hover:bg-muted">
           {isAr ? <ArrowRight size={18} /> : <ArrowLeft size={18} />}
         </Link>
-        <div>
+        <div className="flex-1">
           <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground"><Wallet size={26} className="text-brand-600" />{t(locale, "حسابات المدرسين", "Teacher accounts")}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{t(locale, "تقدير أسبوعي وشهري لمستحقات المدرسين بناءً على الحصص المرتبطة وإعدادات كل مدرس.", "Weekly and monthly estimates for teacher dues based on linked sessions and each teacher's pay settings.")}</p>
         </div>
+        <Link href="/teachers/new" className="inline-flex items-center gap-2 rounded-xl bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600"><PlusCircle size={16} />{t(locale, "إضافة مدرس", "Add teacher")}</Link>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">

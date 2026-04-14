@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, Mail, Phone, Search } from "lucide-react";
+import { BookOpen, Calculator, Mail, Phone, PlusCircle, Search } from "lucide-react";
 import { useUIStore } from "@/stores/ui-store";
 import { COURSE_TYPE_LABELS, COURSE_TYPE_EN_LABELS } from "@/config/labels";
 import { getEmploymentTypeLabel, t } from "@/lib/locale";
@@ -45,14 +45,38 @@ export default function TeachersPage() {
     });
   }, [teachers, search, isAr]);
 
+  const totals = useMemo(() => ({
+    active: teachers.filter((teacher) => teacher.isActive).length,
+    classes: teachers.reduce((sum, teacher) => sum + teacher.classesCount, 0),
+    students: teachers.reduce((sum, teacher) => sum + teacher.studentsCount, 0),
+  }), [teachers]);
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
-          <BookOpen size={28} className="text-brand-600" />
-          {t(locale, "المدرسين", "Teachers")}
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">{t(locale, "إدارة فريق المدرسين وربطهم بالكلاسات والطلاب الفعليين", "Manage teachers and link them with actual classes and students")}</p>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
+            <BookOpen size={28} className="text-brand-600" />
+            {t(locale, "المدرسين", "Teachers")}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">{t(locale, "إدارة فريق المدرسين وربطهم بالكلاسات والطلاب والحسابات المالية", "Manage teachers, their linked classes and students, plus financial tracking")}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/teachers/finance" className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted">
+            <Calculator size={16} />
+            {t(locale, "حسابات المدرسين", "Teacher accounts")}
+          </Link>
+          <Link href="/teachers/new" className="inline-flex items-center gap-2 rounded-xl bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600">
+            <PlusCircle size={16} />
+            {t(locale, "إضافة مدرس", "Add teacher")}
+          </Link>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <SummaryCard label={t(locale, "مدرسون نشطون", "Active teachers")} value={String(totals.active)} />
+        <SummaryCard label={t(locale, "الكلاسات الحالية", "Current classes")} value={String(totals.classes)} />
+        <SummaryCard label={t(locale, "الطلاب المرتبطون", "Linked students")} value={String(totals.students)} />
       </div>
 
       <div className="relative max-w-md">
@@ -101,7 +125,7 @@ export default function TeachersPage() {
 
               <div className="mt-3 space-y-1.5 border-t border-border pt-3 text-xs text-muted-foreground">
                 <div className="flex items-center gap-2"><Phone size={14} />{teacher.phone}</div>
-                <div className="flex items-center gap-2"><Mail size={14} />{teacher.email}</div>
+                <div className="flex items-center gap-2"><Mail size={14} />{teacher.email ?? t(locale, "غير متوفر", "N/A")}</div>
               </div>
             </Link>
           ))}
@@ -110,4 +134,8 @@ export default function TeachersPage() {
       )}
     </div>
   );
+}
+
+function SummaryCard({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-2xl border border-border bg-card p-5"><p className="text-sm text-muted-foreground">{label}</p><p className="mt-2 text-2xl font-bold text-foreground">{value}</p></div>;
 }
