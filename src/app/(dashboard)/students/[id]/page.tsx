@@ -2,12 +2,12 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, CalendarDays, GraduationCap, MessageCircle, Phone, UserCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarDays, CalendarPlus, FileText, GraduationCap, MessageCircle, Phone, ReceiptText, UserCircle } from "lucide-react";
 import { useUIStore } from "@/stores/ui-store";
 import { STUDENT_STATUS_META, getMetaLabel } from "@/config/status-meta";
 import { getCourseLabel, t } from "@/lib/locale";
 import { formatCurrencyEgp, formatDate } from "@/lib/formatters";
-import { getStudentDetails } from "@/services/relations.service";
+import { extractLeadIdFromProjectionId, getStudentDetails } from "@/services/relations.service";
 import { LoadingState, PageStateCard } from "@/components/shared/page-state";
 import type { StudentDetails } from "@/types/crm";
 
@@ -58,17 +58,61 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
   }
 
   const status = STUDENT_STATUS_META[student.status];
+  const sourceLeadId = extractLeadIdFromProjectionId(student.id);
+  const primaryTeacher = student.teachers[0] ?? null;
+  const linkedClassName = student.className ?? "";
+  const scheduleHref = `/schedule/new?className=${encodeURIComponent(linkedClassName)}${student.currentCourse ? `&course=${student.currentCourse}` : ""}${primaryTeacher ? `&teacherId=${primaryTeacher.id}` : ""}`;
+  const createActualHref = `/students/new?parentName=${encodeURIComponent(student.parentName)}&parentPhone=${encodeURIComponent(student.parentPhone)}&childName=${encodeURIComponent(student.fullName)}${student.age > 0 ? `&childAge=${student.age}` : ""}${student.currentCourse ? `&currentCourse=${student.currentCourse}` : ""}${student.className ? `&className=${encodeURIComponent(student.className)}` : ""}`;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Link href="/students" className="rounded-xl p-2 text-muted-foreground transition-colors hover:bg-muted">
-          {isAr ? <ArrowRight size={18} /> : <ArrowLeft size={18} />}
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">{student.fullName}</h1>
-          <p className="text-sm text-muted-foreground">{student.parentName} — {student.parentPhone}</p>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Link href="/students" className="rounded-xl p-2 text-muted-foreground transition-colors hover:bg-muted">
+            {isAr ? <ArrowRight size={18} /> : <ArrowLeft size={18} />}
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">{student.fullName}</h1>
+            <p className="text-sm text-muted-foreground">{student.parentName} — {student.parentPhone}</p>
+          </div>
         </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {sourceLeadId ? (
+            <>
+              <Link href={`/leads/${sourceLeadId}`} className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted">
+                <FileText size={16} />
+                {t(locale, "العميل الأصلي", "Source lead")}
+              </Link>
+              <Link href={createActualHref} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90">
+                <UserCircle size={16} />
+                {t(locale, "إنشاء ملف طالب فعلي", "Create real student profile")}
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link href={`/students/${student.id}/report`} className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted">
+                <FileText size={16} />
+                {t(locale, "التقرير الشهري", "Monthly report")}
+              </Link>
+              <Link href={`/payments/new?studentId=${student.id}`} className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted">
+                <ReceiptText size={16} />
+                {t(locale, "إضافة دفعة", "Add payment")}
+              </Link>
+              <Link href={scheduleHref} className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted">
+                <CalendarPlus size={16} />
+                {t(locale, "إضافة حصة", "Add session")}
+              </Link>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
+        <QuickStat title={t(locale, "الحالة", "Status")} value={getMetaLabel(status, locale)} />
+        <QuickStat title={t(locale, "المدرس الحالي", "Current teacher")} value={primaryTeacher?.fullName ?? t(locale, "غير مرتبط بعد", "Not linked yet")} />
+        <QuickStat title={t(locale, "الكلاس الحالي", "Current class")} value={student.className ?? t(locale, "غير مسجل", "Not assigned")} />
+        <QuickStat title={t(locale, "المسؤول", "Owner")} value={student.ownerName ?? t(locale, "غير مخصص", "Unassigned")} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -86,6 +130,7 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
             <Info label={t(locale, "تاريخ الالتحاق", "Enrollment date")} value={formatDate(student.enrollmentDate, locale)} />
             <Info label={t(locale, "عدد الحصص", "Sessions attended")} value={student.sessionsAttended.toString()} />
             <Info label={t(locale, "إجمالي المدفوع", "Total paid")} value={formatCurrencyEgp(student.totalPaid, locale)} />
+            <Info label={t(locale, "المسؤول", "Owner")} value={student.ownerName ?? t(locale, "غير مخصص", "Unassigned")} />
           </div>
         </div>
 
@@ -174,6 +219,10 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
       </div>
     </div>
   );
+}
+
+function QuickStat({ title, value }: { title: string; value: string }) {
+  return <div className="rounded-2xl border border-border bg-card p-5"><p className="text-sm text-muted-foreground">{title}</p><p className="mt-2 font-semibold text-foreground">{value}</p></div>;
 }
 
 function Info({ label, value }: { label: string; value: string }) {

@@ -1,13 +1,14 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Mail, MapPin, MessageCircle, Phone, UserCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, Mail, MapPin, MessageCircle, Phone, UserCircle, UserPlus } from "lucide-react";
 import { useUIStore } from "@/stores/ui-store";
 import { STUDENT_STATUS_META, getMetaLabel } from "@/config/status-meta";
-import { t, getStageLabel } from "@/lib/locale";
+import { t, getCourseLabel, getStageLabel } from "@/lib/locale";
 import { formatCurrencyEgp } from "@/lib/formatters";
-import { getParentDetails } from "@/services/relations.service";
+import { extractLeadIdFromProjectionId, getParentDetails } from "@/services/relations.service";
+import { buildStudentReportSnapshot } from "@/services/student-report.service";
 import { LoadingState, PageStateCard } from "@/components/shared/page-state";
 import type { ParentDetails } from "@/types/crm";
 
@@ -57,16 +58,48 @@ export default function ParentDetailsPage({ params }: { params: Promise<{ id: st
     );
   }
 
+  const childrenSnapshots = useMemo(() => {
+    return parent.childrenRecords.map((student) => {
+      const sourceLeadId = extractLeadIdFromProjectionId(student.id);
+      const snapshot = buildStudentReportSnapshot(student);
+      const scheduleHref = `/schedule/new?className=${encodeURIComponent(student.className ?? "")}${student.currentCourse ? `&course=${student.currentCourse}` : ""}`;
+      const createActualHref = `/students/new?parentName=${encodeURIComponent(parent.fullName)}&parentPhone=${encodeURIComponent(parent.phone)}&childName=${encodeURIComponent(student.fullName)}${student.age > 0 ? `&childAge=${student.age}` : ""}${student.currentCourse ? `&currentCourse=${student.currentCourse}` : ""}${student.className ? `&className=${encodeURIComponent(student.className)}` : ""}`;
+
+      return { student, sourceLeadId, snapshot, scheduleHref, createActualHref };
+    });
+  }, [parent]);
+
+  const projectedCount = childrenSnapshots.filter((item) => item.sourceLeadId).length;
+  const actualCount = childrenSnapshots.length - projectedCount;
+  const reportReadyCount = childrenSnapshots.filter((item) => item.snapshot.ready).length;
+  const needsAttentionCount = childrenSnapshots.length - reportReadyCount;
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Link href="/parents" className="rounded-xl p-2 text-muted-foreground transition-colors hover:bg-muted">
-          {isAr ? <ArrowRight size={18} /> : <ArrowLeft size={18} />}
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">{parent.fullName}</h1>
-          <p className="text-sm text-muted-foreground">{parent.phone}</p>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Link href="/parents" className="rounded-xl p-2 text-muted-foreground transition-colors hover:bg-muted">
+            {isAr ? <ArrowRight size={18} /> : <ArrowLeft size={18} />}
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">{parent.fullName}</h1>
+            <p className="text-sm text-muted-foreground">{parent.phone}</p>
+          </div>
         </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Link href={`/students/new?parentName=${encodeURIComponent(parent.fullName)}&parentPhone=${encodeURIComponent(parent.phone)}`} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90">
+            <UserPlus size={16} />
+            {t(locale, "إضافة طالب لهذا ولي الأمر", "Add student for this parent")}
+          </Link>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
+        <SummaryBox title={t(locale, "ملفات فعلية", "Real profiles")} value={String(actualCount)} />
+        <SummaryBox title={t(locale, "من العملاء الحاليين", "From current customers")} value={String(projectedCount)} />
+        <SummaryBox title={t(locale, "تقارير جاهزة", "Reports ready")} value={String(reportReadyCount)} />
+        <SummaryBox title={t(locale, "يحتاج متابعة", "Needs follow-up")} value={String(needsAttentionCount)} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -87,6 +120,7 @@ export default function ParentDetailsPage({ params }: { params: Promise<{ id: st
             <SummaryRow label={t(locale, "طلاب نشطون", "Active students")} value={String(parent.activeStudents)} />
             <SummaryRow label={t(locale, "إجمالي المدفوع", "Total paid")} value={formatCurrencyEgp(parent.totalPaid, locale)} />
             <SummaryRow label={t(locale, "عملاء محتملون مفتوحون", "Open leads")} value={String(parent.openLeads.length)} />
+            <SummaryRow label={t(locale, "المسؤول", "Owner")} value={parent.ownerName ?? t(locale, "غير مخصص", "Unassigned")} />
           </div>
         </div>
       </div>
@@ -94,20 +128,66 @@ export default function ParentDetailsPage({ params }: { params: Promise<{ id: st
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <div className="rounded-2xl border border-border bg-card p-5">
           <h3 className="mb-4 font-bold text-foreground">{t(locale, "الأطفال المرتبطون", "Linked children")}</h3>
-          {parent.childrenRecords.length === 0 ? (
+          {childrenSnapshots.length === 0 ? (
             <EmptyCopy locale={locale} ar="لا توجد ملفات طلاب مرتبطة بهذا الرقم أو الاسم حتى الآن" en="No student profiles are linked to this parent yet" />
           ) : (
-            <div className="space-y-3">
-              {parent.childrenRecords.map((student) => (
-                <Link key={student.id} href={`/students/${student.id}`} className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-background p-4 transition-colors hover:bg-muted/40">
-                  <div>
-                    <p className="font-semibold text-foreground">{student.fullName}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">{student.className ?? t(locale, "غير مسجل", "Not assigned")}</p>
+            <div className="space-y-4">
+              {childrenSnapshots.map(({ student, sourceLeadId, snapshot, scheduleHref, createActualHref }) => (
+                <div key={student.id} className="rounded-2xl border border-border bg-background p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-semibold text-foreground">{student.fullName}</p>
+                        <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ backgroundColor: STUDENT_STATUS_META[student.status].bg, color: STUDENT_STATUS_META[student.status].color }}>
+                          {getMetaLabel(STUDENT_STATUS_META[student.status], locale)}
+                        </span>
+                        {sourceLeadId ? (
+                          <span className="rounded-full bg-warning-100 px-2.5 py-1 text-[11px] font-semibold text-warning-700 dark:bg-warning-950 dark:text-warning-300">
+                            {t(locale, "من العملاء الحاليين", "From current customers")}
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {student.className ?? t(locale, "غير مسجل", "Not assigned")}
+                        {student.currentCourse ? ` • ${getCourseLabel(student.currentCourse, locale)}` : ""}
+                      </p>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {t(locale, "المتبقي للتقرير التالي", "Remaining to next report")}: {snapshot.sessionsUntilNext} {t(locale, "حصص", "sessions")}
+                      </p>
+                    </div>
                   </div>
-                  <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ backgroundColor: STUDENT_STATUS_META[student.status].bg, color: STUDENT_STATUS_META[student.status].color }}>
-                    {getMetaLabel(STUDENT_STATUS_META[student.status], locale)}
-                  </span>
-                </Link>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {sourceLeadId ? (
+                      <>
+                        <Link href={`/leads/${sourceLeadId}`} className="rounded-xl border border-border px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted">
+                          {t(locale, "فتح العميل الأصلي", "Open source lead")}
+                        </Link>
+                        <Link href={createActualHref} className="rounded-xl bg-brand-600 px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90">
+                          {t(locale, "إنشاء ملف طالب فعلي", "Create real student profile")}
+                        </Link>
+                        <Link href={scheduleHref} className="rounded-xl border border-border px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted">
+                          {t(locale, "إضافة حصة", "Add session")}
+                        </Link>
+                      </>
+                    ) : (
+                      <>
+                        <Link href={`/students/${student.id}`} className="rounded-xl bg-brand-600 px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90">
+                          {t(locale, "فتح ملف الطالب", "Open student profile")}
+                        </Link>
+                        <Link href={`/students/${student.id}/report`} className="rounded-xl border border-border px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted">
+                          {t(locale, "التقرير", "Report")}
+                        </Link>
+                        <Link href={`/payments/new?studentId=${student.id}`} className="rounded-xl border border-border px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted">
+                          {t(locale, "دفعة", "Payment")}
+                        </Link>
+                        <Link href={scheduleHref} className="rounded-xl border border-border px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted">
+                          {t(locale, "حصة", "Session")}
+                        </Link>
+                      </>
+                    )}
+                  </div>
+                </div>
               ))}
             </div>
           )}
@@ -138,29 +218,27 @@ export default function ParentDetailsPage({ params }: { params: Promise<{ id: st
   );
 }
 
-function Info({ icon: Icon, label, value, href, external }: { icon: typeof Phone; label: string; value: string; href?: string; external?: boolean }) {
+function Info({ icon: Icon, label, value, href, external = false }: { icon: typeof Phone; label: string; value: string; href?: string; external?: boolean }) {
   const content = (
-    <div className="rounded-xl bg-muted/40 p-3">
-      <div className="flex items-center gap-2 text-xs text-muted-foreground"><Icon size={14} />{label}</div>
-      <p className="mt-1 font-semibold text-foreground">{value}</p>
+    <div className="flex items-start gap-3 rounded-xl bg-muted/40 p-3">
+      <span className="mt-0.5 rounded-xl bg-background p-2 text-brand-600"><Icon size={16} /></span>
+      <div className="min-w-0">
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="mt-1 break-words font-semibold text-foreground">{value}</p>
+      </div>
     </div>
   );
 
   if (!href) return content;
-  return (
-    <a href={href} target={external ? "_blank" : undefined} rel={external ? "noreferrer" : undefined} className="block transition-opacity hover:opacity-85">
-      {content}
-    </a>
-  );
+  return <a href={href} target={external ? "_blank" : undefined} rel={external ? "noreferrer" : undefined} className="block transition-opacity hover:opacity-90">{content}</a>;
 }
 
 function SummaryRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between gap-4 border-b border-border/70 py-2 last:border-0">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="text-sm font-medium text-foreground">{value}</span>
-    </div>
-  );
+  return <div className="flex items-center justify-between gap-3 rounded-xl bg-muted/40 p-3"><span className="text-sm text-muted-foreground">{label}</span><span className="font-semibold text-foreground">{value}</span></div>;
+}
+
+function SummaryBox({ title, value }: { title: string; value: string }) {
+  return <div className="rounded-2xl border border-border bg-card p-5"><p className="text-sm text-muted-foreground">{title}</p><p className="mt-2 text-2xl font-bold text-foreground">{value}</p></div>;
 }
 
 function EmptyCopy({ locale, ar, en }: { locale: "ar" | "en"; ar: string; en: string }) {
