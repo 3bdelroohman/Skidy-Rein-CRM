@@ -1,9 +1,8 @@
-﻿import { createBrowserClient } from "@supabase/ssr";
+import { createBrowserClient } from "@supabase/ssr";
 import type { CommChannel, FollowUpType, LeadStage, Priority } from "@/types/common.types";
 import type { Database } from "@/types/database.types";
 import type { CreateFollowUpInput, FollowUpItem, LeadActivityItem, LeadListItem } from "@/types/crm";
 import { MOCK_FOLLOW_UPS } from "@/lib/mock-data";
-import { STAGE_LABELS } from "@/config/labels";
 import { isBrowser, readStorage, sortByDateAsc, sortByDateDesc, writeStorage } from "@/services/storage";
 
 const FOLLOW_UPS_KEY = "skidy.crm.follow-ups";
@@ -23,6 +22,12 @@ const VALID_CHANNELS: CommChannel[] = ["whatsapp", "email", "call", "sms"];
 const VALID_PRIORITIES: Priority[] = ["low", "medium", "high", "urgent"];
 
 type FollowUpOpenStatus = Exclude<FollowUpItem["status"], "completed">;
+type FollowUpRow = Database["public"]["Tables"]["follow_ups"]["Row"];
+type LeadNameEntry = { childName: string; parentName: string };
+
+/* ------------------------------------------------------------------ */
+/*  Supabase helpers                                                   */
+/* ------------------------------------------------------------------ */
 
 function getSupabaseClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -42,6 +47,10 @@ function shouldUseDemoFallback(): boolean {
 function mockFollowUps(): FollowUpItem[] {
   return MOCK_FOLLOW_UPS.map((item) => ({ ...item }));
 }
+
+/* ------------------------------------------------------------------ */
+/*  Value coercion helpers                                             */
+/* ------------------------------------------------------------------ */
 
 function asString(value: unknown, fallback = ""): string {
   return typeof value === "string" && value.trim().length > 0 ? value : fallback;
@@ -64,28 +73,77 @@ function resolveOpenStatus(scheduledAt: string): FollowUpOpenStatus {
   return timestamp < Date.now() ? "overdue" : "pending";
 }
 
-function asStatus(value: unknown, scheduledAt: string): FollowUpItem["status"] {
-  if (value === "completed") return "completed";
-  return value === "overdue" ? "overdue" : resolveOpenStatus(scheduledAt);
+/* ------------------------------------------------------------------ */
+/*  Lead name resolution                                               */
+/*  follow_ups has NO lead_name / parent_name columns.                 */
+/*  We batch-fetch from leads to get child_name + parent_name.         */
+/* ------------------------------------------------------------------ */
+
+async function resolveLeadNames(
+  rows: FollowUpRow[],
+  supabase: ReturnType<typeof getSupabaseClient>,
+): Promise<Map<string, LeadNameEntry>> {
+  const map = new Map<string, LeadNameEntry>();
+  if (!supabase) return map;
+
+  const leadIds = [
+    ...new Set(rows.map((r) => r.lead_id).filter((id): id is string => Boolean(id))),
+  ];
+  if (leadIds.length === 0) return map;
+
+  try {
+    const { data } = await supabase
+      .from("leads")
+      .select("id, child_name, parent_name")
+      .in("id", leadIds);
+
+    if (data) {
+      for (const lead of data) {
+        map.set(lead.id, {
+          childName: lead.child_name ?? "",
+          parentName: lead.parent_name ?? "",
+        });
+      }
+    }
+  } catch {
+    // silent - mapRow will use fallbacks
+  }
+
+  return map;
 }
 
-function mapRow(row: Database["public"]["Tables"]["follow_ups"]["Row"] | Record<string, unknown>): FollowUpItem {
-  const record = row as Record<string, unknown>;
-  const scheduledAt = asString(record.scheduled_at ?? record.scheduledAt, new Date().toISOString());
+/* ------------------------------------------------------------------ */
+/*  Row mapping                                                        */
+/*  Derives status from is_completed (boolean) - NOT from a phantom    */
+/*  "status" column. Reads names from the resolved map.                */
+/* ------------------------------------------------------------------ */
+
+function mapRow(
+  row: FollowUpRow,
+  names?: Map<string, LeadNameEntry>,
+): FollowUpItem {
+  const scheduledAt = row.scheduled_at ?? new Date().toISOString();
+  const isCompleted = row.is_completed === true;
+  const leadEntry = row.lead_id ? names?.get(row.lead_id) : undefined;
+
   return {
-    id: asString(record.id, crypto.randomUUID()),
-    leadId: typeof record.lead_id === "string" ? record.lead_id : null,
-    title: asString(record.title, "Ù…ØªØ§Ø¨Ø¹Ø©"),
-    leadName: asString(record.lead_name ?? record.leadName, "Ø¹Ù…ÙŠÙ„ ØºÙŠØ± Ù…Ø­Ø¯Ø¯"),
-    parentName: asString(record.parent_name ?? record.parentName, "ÙˆÙ„ÙŠ Ø£Ù…Ø± ØºÙŠØ± Ù…Ø­Ø¯Ø¯"),
-    type: asType(record.type),
-    channel: asChannel(record.channel),
-    priority: asPriority(record.priority),
+    id: row.id ?? crypto.randomUUID(),
+    leadId: row.lead_id ?? null,
+    title: row.title || "\u0645\u062a\u0627\u0628\u0639\u0629",
+    leadName: leadEntry?.childName || "\u0639\u0645\u064a\u0644 \u063a\u064a\u0631 \u0645\u062d\u062f\u062f",
+    parentName: leadEntry?.parentName || "\u0648\u0644\u064a \u0623\u0645\u0631 \u063a\u064a\u0631 \u0645\u062d\u062f\u062f",
+    type: asType(row.type),
+    channel: asChannel(row.channel),
+    priority: asPriority(row.priority),
     scheduledAt,
-    status: asStatus(record.status, scheduledAt),
-    assignedTo: asString(record.assigned_to ?? record.assignedTo, "ØºÙŠØ± Ù…Ø®ØµØµ"),
+    status: isCompleted ? "completed" : resolveOpenStatus(scheduledAt),
+    assignedTo: row.assigned_to ?? "\u063a\u064a\u0631 \u0645\u062e\u0635\u0635",
   };
 }
+
+/* ------------------------------------------------------------------ */
+/*  Local storage helpers                                              */
+/* ------------------------------------------------------------------ */
 
 function getLocalFollowUps(): FollowUpItem[] {
   const seed = shouldUseDemoFallback() ? mockFollowUps() : ([] as FollowUpItem[]);
@@ -116,7 +174,18 @@ function saveLocalActivities(activities: LeadActivityItem[]): void {
   writeStorage(ACTIVITIES_KEY, sortByDateDesc(activities, (activity) => activity.date));
 }
 
-function createLeadActivity(leadId: string | null | undefined, action: string, by: string, type: LeadActivityItem["type"]): LeadActivityItem | null {
+/* ------------------------------------------------------------------ */
+/*  Activity helper                                                    */
+/*  lead_activities has NO "type" column - stored in metadata (jsonb)  */
+/*  created_at is auto-generated - do NOT send it                      */
+/* ------------------------------------------------------------------ */
+
+function createLeadActivity(
+  leadId: string | null | undefined,
+  action: string,
+  by: string,
+  type: LeadActivityItem["type"],
+): LeadActivityItem | null {
   if (!leadId) return null;
 
   const activity: LeadActivityItem = {
@@ -135,13 +204,16 @@ function createLeadActivity(leadId: string | null | undefined, action: string, b
     void supabase.from("lead_activities").insert({
       lead_id: leadId,
       action: activity.action,
-            type: activity.type,
-      created_at: activity.date,
+      metadata: { type: activity.type, actor_name: by },
     });
   }
 
   return activity;
 }
+
+/* ------------------------------------------------------------------ */
+/*  Lead sync helpers                                                  */
+/* ------------------------------------------------------------------ */
 
 function deriveNextFollowUpAt(leadId: string | null | undefined, items: FollowUpItem[]): string | null {
   if (!leadId) return null;
@@ -179,6 +251,10 @@ async function syncLeadNextFollowUp(leadId: string | null | undefined, items: Fo
     .eq("id", leadId);
 }
 
+/* ------------------------------------------------------------------ */
+/*  List all follow-ups                                                */
+/* ------------------------------------------------------------------ */
+
 export async function listFollowUps(): Promise<FollowUpItem[]> {
   const demoFallback = shouldUseDemoFallback() ? getLocalFollowUps() : [];
   const supabase = getSupabaseClient();
@@ -201,7 +277,8 @@ export async function listFollowUps(): Promise<FollowUpItem[]> {
       return [];
     }
 
-    const mapped = data.map((row: Database["public"]["Tables"]["follow_ups"]["Row"]) => mapRow(row));
+    const names = await resolveLeadNames(data, supabase);
+    const mapped = data.map((row) => mapRow(row, names));
     saveLocalFollowUps(mapped);
     return mapped;
   } catch (error) {
@@ -210,6 +287,10 @@ export async function listFollowUps(): Promise<FollowUpItem[]> {
     return [];
   }
 }
+
+/* ------------------------------------------------------------------ */
+/*  List follow-ups by lead                                            */
+/* ------------------------------------------------------------------ */
 
 export async function listFollowUpsByLead(leadId: string): Promise<FollowUpItem[]> {
   const demoFallback = shouldUseDemoFallback() ? getLocalFollowUps().filter((item) => item.leadId === leadId) : [];
@@ -236,7 +317,8 @@ export async function listFollowUpsByLead(leadId: string): Promise<FollowUpItem[
       return [];
     }
 
-    const mapped = data.map((row: Database["public"]["Tables"]["follow_ups"]["Row"]) => mapRow(row));
+    const names = await resolveLeadNames(data, supabase);
+    const mapped = data.map((row) => mapRow(row, names));
     const rest = getLocalFollowUps().filter((item) => item.leadId !== leadId);
     saveLocalFollowUps([...rest, ...mapped]);
     return mapped;
@@ -245,6 +327,12 @@ export async function listFollowUpsByLead(leadId: string): Promise<FollowUpItem[
     return [];
   }
 }
+
+/* ------------------------------------------------------------------ */
+/*  Create follow-up                                                   */
+/*  REMOVED ghost columns: lead_name, status                           */
+/*  ADDED: is_completed (real boolean column)                          */
+/* ------------------------------------------------------------------ */
 
 export async function createFollowUp(input: CreateFollowUpInput): Promise<FollowUpItem> {
   const scheduledAt = input.scheduledAt;
@@ -266,8 +354,15 @@ export async function createFollowUp(input: CreateFollowUpInput): Promise<Follow
   const next = [...current, item];
   saveLocalFollowUps(next);
 
-  const typeLabel = item.type === "trial_reminder" ? "ØªØ°ÙƒÙŠØ± Ø¨Ø§Ù„Ø³ÙŠØ´Ù† Ø§Ù„ØªØ¬Ø±ÙŠØ¨ÙŠØ©" : item.title;
-  createLeadActivity(item.leadId, `ØªÙ… Ø¥Ù†Ø´Ø§Ø¡ Ù…ØªØ§Ø¨Ø¹Ø© Ø¬Ø¯ÙŠØ¯Ø©: ${typeLabel}`, item.assignedTo, "contact");
+  const typeLabel = item.type === "trial_reminder"
+    ? "\u062a\u0630\u0643\u064a\u0631 \u0628\u0627\u0644\u0633\u064a\u0634\u0646 \u0627\u0644\u062a\u062c\u0631\u064a\u0628\u064a\u0629"
+    : item.title;
+  createLeadActivity(
+    item.leadId,
+    "\u062a\u0645 \u0625\u0646\u0634\u0627\u0621 \u0645\u062a\u0627\u0628\u0639\u0629 \u062c\u062f\u064a\u062f\u0629: " + typeLabel,
+    item.assignedTo,
+    "contact",
+  );
   await syncLeadNextFollowUp(item.leadId, next);
 
   const supabase = getSupabaseClient();
@@ -282,20 +377,28 @@ export async function createFollowUp(input: CreateFollowUpInput): Promise<Follow
       .insert({
         lead_id: item.leadId,
         title: item.title,
-        lead_name: item.leadName,
-                type: item.type,
+        type: item.type,
         channel: item.channel,
         priority: item.priority,
         scheduled_at: item.scheduledAt,
-        status: item.status,
+        is_completed: false,
         assigned_to: item.assignedTo,
       })
       .select("*")
       .maybeSingle();
 
     if (!error && data) {
-      const synced = mapRow(data);
-      const merged = getLocalFollowUps().map((existing) => (existing.id === item.id ? synced : existing));
+      const names = new Map<string, LeadNameEntry>();
+      if (data.lead_id) {
+        names.set(data.lead_id, {
+          childName: item.leadName,
+          parentName: item.parentName,
+        });
+      }
+      const synced = mapRow(data, names);
+      const merged = getLocalFollowUps().map((existing) =>
+        existing.id === item.id ? synced : existing,
+      );
       saveLocalFollowUps(merged);
       await syncLeadNextFollowUp(item.leadId, merged);
       return synced;
@@ -308,6 +411,12 @@ export async function createFollowUp(input: CreateFollowUpInput): Promise<Follow
 
   return item;
 }
+
+/* ------------------------------------------------------------------ */
+/*  Update follow-up status                                            */
+/*  FIXED: uses is_completed + completed_at                            */
+/*  instead of ghost "status" column                                   */
+/* ------------------------------------------------------------------ */
 
 async function updateFollowUpStatus(
   id: string,
@@ -324,9 +433,14 @@ async function updateFollowUpStatus(
 
   if (updated.leadId) {
     const action = nextStatus === "completed"
-      ? `ØªÙ… Ø¥Ù†Ù‡Ø§Ø¡ Ù…ØªØ§Ø¨Ø¹Ø© ${updated.title}`
-      : `ØªÙ…Øª Ø¥Ø¹Ø§Ø¯Ø© ÙØªØ­ Ù…ØªØ§Ø¨Ø¹Ø© ${updated.title}`;
-    createLeadActivity(updated.leadId, action, updated.assignedTo, nextStatus === "completed" ? "contact" : "note");
+      ? "\u062a\u0645 \u0625\u0646\u0647\u0627\u0621 \u0645\u062a\u0627\u0628\u0639\u0629 " + updated.title
+      : "\u062a\u0645\u062a \u0625\u0639\u0627\u062f\u0629 \u0641\u062a\u062d \u0645\u062a\u0627\u0628\u0639\u0629 " + updated.title;
+    createLeadActivity(
+      updated.leadId,
+      action,
+      updated.assignedTo,
+      nextStatus === "completed" ? "contact" : "note",
+    );
   }
 
   await syncLeadNextFollowUp(updated.leadId, merged);
@@ -341,7 +455,7 @@ async function updateFollowUpStatus(
     await supabase
       .from("follow_ups")
       .update({
-        status: nextStatus,
+        is_completed: nextStatus === "completed",
         completed_at: nextStatus === "completed" ? new Date().toISOString() : null,
       })
       .eq("id", id);
@@ -361,6 +475,10 @@ export async function markFollowUpCompleted(id: string): Promise<FollowUpItem | 
 export async function reopenFollowUp(id: string): Promise<FollowUpItem | null> {
   return updateFollowUpStatus(id, "pending");
 }
+
+/* ------------------------------------------------------------------ */
+/*  Stage-based suggestions                                            */
+/* ------------------------------------------------------------------ */
 
 export function suggestFollowUpTypeByStage(stage: LeadStage): FollowUpType {
   switch (stage) {
@@ -385,21 +503,20 @@ export function suggestFollowUpTypeByStage(stage: LeadStage): FollowUpType {
 export function suggestFollowUpTitle(stage: LeadStage, childName: string): string {
   switch (stage) {
     case "new":
-      return `Ø£ÙˆÙ„ ØªÙˆØ§ØµÙ„ â€” ${childName}`;
+      return "\u0623\u0648\u0644 \u062a\u0648\u0627\u0635\u0644 \u2013 " + childName;
     case "qualified":
-      return `Ø§Ø³ØªÙƒÙ…Ø§Ù„ Ø§Ù„ØªØ£Ù‡ÙŠÙ„ â€” ${childName}`;
+      return "\u0627\u0633\u062a\u0643\u0645\u0627\u0644 \u0627\u0644\u062a\u0623\u0647\u064a\u0644 \u2013 " + childName;
     case "trial_proposed":
-      return `ØªØ£ÙƒÙŠØ¯ Ù…ÙˆØ¹Ø¯ Ø§Ù„Ø³ÙŠØ´Ù† â€” ${childName}`;
+      return "\u062a\u0623\u0643\u064a\u062f \u0645\u0648\u0639\u062f \u0627\u0644\u0633\u064a\u0634\u0646 \u2013 " + childName;
     case "trial_booked":
-      return `ØªØ°ÙƒÙŠØ± Ø¨Ø§Ù„Ø³ÙŠØ´Ù† â€” ${childName}`;
+      return "\u062a\u0630\u0643\u064a\u0631 \u0628\u0627\u0644\u0633\u064a\u0634\u0646 \u2013 " + childName;
     case "trial_attended":
-      return `Ù…ØªØ§Ø¨Ø¹Ø© Ø¨Ø¹Ø¯ Ø§Ù„Ø³ÙŠØ´Ù† â€” ${childName}`;
+      return "\u0645\u062a\u0627\u0628\u0639\u0629 \u0628\u0639\u062f \u0627\u0644\u0633\u064a\u0634\u0646 \u2013 " + childName;
     case "offer_sent":
-      return `Ù…ØªØ§Ø¨Ø¹Ø© Ø§Ù„Ø¹Ø±Ø¶ â€” ${childName}`;
+      return "\u0645\u062a\u0627\u0628\u0639\u0629 \u0627\u0644\u0639\u0631\u0636 \u2013 " + childName;
     case "lost":
-      return `Ø¥Ø¹Ø§Ø¯Ø© ØªÙˆØ§ØµÙ„ â€” ${childName}`;
+      return "\u0625\u0639\u0627\u062f\u0629 \u062a\u0648\u0627\u0635\u0644 \u2013 " + childName;
     default:
-      return `Ù…ØªØ§Ø¨Ø¹Ø© Ø§Ù„Ø¯ÙØ¹ â€” ${childName}`;
+      return "\u0645\u062a\u0627\u0628\u0639\u0629 \u0627\u0644\u062f\u0641\u0639 \u2013 " + childName;
   }
 }
-
