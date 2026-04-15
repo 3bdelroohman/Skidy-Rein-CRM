@@ -24,26 +24,27 @@ type RawClassRow = {
   id?: string | null;
   teacher_id?: string | null;
   name?: string | null;
-  course?: string | null;
-  start_time?: string | null;
-  end_time?: string | null;
-  day_of_week?: number | string | null;
-  weekday?: number | string | null;
-  day?: number | string | null;
+  course_id?: string | null;
+  max_students?: number | null;
+  current_students?: number | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  is_active?: boolean | null;
+  meeting_link?: string | null;
+  schedule_notes?: string | null;
 };
 
 type RawSessionRow = {
   id?: string | null;
   class_id?: string | null;
   teacher_id?: string | null;
-  title?: string | null;
-  status?: string | null;
+  session_date?: string | null;
   start_time?: string | null;
   end_time?: string | null;
-  session_date?: string | null;
-  day_of_week?: number | string | null;
-  weekday?: number | string | null;
-  day?: number | string | null;
+  topic?: string | null;
+  notes?: string | null;
+  meeting_link?: string | null;
+  is_cancelled?: boolean | null;
 };
 
 type RawEnrollmentRow = {
@@ -134,6 +135,7 @@ function mapSessionFromClass(
   row: RawClassRow,
   teachers: TeacherListItem[],
   enrollmentCount: number,
+  courseMap: Map<string, CourseType>,
 ): ScheduleSessionItem {
   const teacher = inferTeacher(asNullableString(row.teacher_id), null, teachers);
   const id = asString(row.id, `class-${Math.random().toString(36).slice(2, 8)}`);
@@ -142,13 +144,13 @@ function mapSessionFromClass(
     id,
     classId: asNullableString(row.id),
     teacherId: asNullableString(row.teacher_id),
-    day: extractDay(row, 0),
-    startTime: asString(row.start_time, "16:00"),
-    endTime: asString(row.end_time, "17:00"),
+    day: row.start_date ? new Date(row.start_date).getDay() : 0,
+    startTime: "16:00",
+    endTime: "17:00",
     className: asString(row.name, "Class"),
     teacher: teacher?.fullName ?? "Ù…Ø¯Ø±Ø³ ØºÙŠØ± Ù…Ø­Ø¯Ø¯",
     students: enrollmentCount,
-    course: asCourse(row.course),
+    course: asCourse(row.course_id ? courseMap.get(row.course_id) : null),
     sessionDate: null,
   } satisfies ScheduleSessionItem;
 }
@@ -158,6 +160,7 @@ function mapSessionFromSession(
   classMap: Map<string, RawClassRow>,
   teachers: TeacherListItem[],
   studentsCount: number,
+  courseMap: Map<string, CourseType>,
 ): ScheduleSessionItem {
   const classRow = row.class_id ? classMap.get(row.class_id) ?? null : null;
   const teacher = inferTeacher(asNullableString(row.teacher_id ?? classRow?.teacher_id), null, teachers);
@@ -167,13 +170,13 @@ function mapSessionFromSession(
     id,
     classId: asNullableString(row.class_id),
     teacherId: asNullableString(row.teacher_id ?? classRow?.teacher_id),
-    day: extractDay(row, extractDay(classRow ?? {}, 0)),
-    startTime: asString(row.start_time ?? classRow?.start_time, "16:00"),
-    endTime: asString(row.end_time ?? classRow?.end_time, "17:00"),
-    className: asString(row.title ?? classRow?.name, "Session"),
+    day: row.session_date ? new Date(row.session_date).getDay() : 0,
+    startTime: asString(row.start_time, "16:00"),
+    endTime: asString(row.end_time, "17:00"),
+    className: asString(classRow?.name ?? row.topic, "Session"),
     teacher: teacher?.fullName ?? "Ù…Ø¯Ø±Ø³ ØºÙŠØ± Ù…Ø­Ø¯Ø¯",
     students: studentsCount,
-    course: asCourse(classRow?.course, "scratch"),
+    course: asCourse(classRow?.course_id ? courseMap.get(classRow.course_id) : null),
     sessionDate: asNullableString(row.session_date),
   } satisfies ScheduleSessionItem;
 }
@@ -193,10 +196,11 @@ export async function listScheduleSessions(): Promise<ScheduleSessionItem[]> {
   if (!supabase) return local.length > 0 ? local : (ALLOW_DEMO ? DEFAULT_SCHEDULE : []);
 
   try {
-    const [{ students, teachers }, classesResponse, sessionsResponse, enrollmentsResponse] = await Promise.all([
+    const [{ students, teachers }, classesResponse, sessionsResponse, coursesResponse, enrollmentsResponse] = await Promise.all([
       buildStudentsTeachersParents(),
       supabase.from("classes").select("*"),
       supabase.from("sessions").select("*").order("session_date", { ascending: false }),
+      supabase.from("courses").select("id, type"),
       supabase.from("class_enrollments").select("*"),
     ]);
 
@@ -204,11 +208,14 @@ export async function listScheduleSessions(): Promise<ScheduleSessionItem[]> {
     const sessionRows = ((sessionsResponse.data ?? []) as RawSessionRow[]);
     const enrollmentRows = ((enrollmentsResponse.data ?? []) as RawEnrollmentRow[]);
 
-    if (classesResponse.error || sessionsResponse.error || enrollmentsResponse.error) {
-      console.error("[schedule] failed to load from Supabase", classesResponse.error || sessionsResponse.error || enrollmentsResponse.error);
+    if (classesResponse.error || sessionsResponse.error || enrollmentsResponse.error || (coursesResponse as { error: unknown }).error) {
+      console.error("[schedule] failed to load from Supabase", classesResponse.error || sessionsResponse.error || enrollmentsResponse.error || (coursesResponse as { error: unknown }).error);
       clearLocalSchedule();
       return ALLOW_DEMO && local.length === 0 ? DEFAULT_SCHEDULE : [];
     }
+
+    const courseMap = new Map<string, CourseType>();
+    ((coursesResponse as { data: { id: string; type: string }[] | null }).data ?? []).forEach((c) => courseMap.set(c.id, c.type as CourseType));
 
     if (classesRows.length === 0 && sessionRows.length === 0) {
       clearLocalSchedule();
@@ -235,7 +242,7 @@ export async function listScheduleSessions(): Promise<ScheduleSessionItem[]> {
 
     const mappedFromSessions = sessionRows.map((row) => {
       const studentsCount = row.class_id ? (enrollmentCountByClassId.get(row.class_id) ?? 0) : 0;
-      return mapSessionFromSession(row, classMap, teachers, studentsCount);
+      return mapSessionFromSession(row, classMap, teachers, studentsCount, courseMap);
     });
 
     const mappedStandaloneClasses = classesRows
@@ -246,7 +253,7 @@ export async function listScheduleSessions(): Promise<ScheduleSessionItem[]> {
       .map((row) => {
         const id = asString(row.id);
         const fallbackStudents = students.filter((student) => student.className === row.name).length;
-        return mapSessionFromClass(row, teachers, enrollmentCountByClassId.get(id) ?? fallbackStudents);
+        return mapSessionFromClass(row, teachers, enrollmentCountByClassId.get(id) ?? fallbackStudents, courseMap);
       });
 
     const merged = sortSessions([...mappedFromSessions, ...mappedStandaloneClasses]);
@@ -430,5 +437,8 @@ export async function createScheduleEntry(input: CreateScheduleEntryInput): Prom
   saveLocalSchedule([created, ...getLocalSchedule().filter((item) => item.id !== created.id)]);
   return created;
 }
+
+
+
 
 

@@ -47,20 +47,28 @@ function normalizeName(value: string | null | undefined): string {
     .trim();
 }
 
-function mapRow(row: Database["public"]["Tables"]["students"]["Row"] | Record<string, unknown>): StudentListItem {
+interface ParentLookup {
+  full_name: string;
+  phone: string;
+}
+
+function mapRow(
+  row: Database["public"]["Tables"]["students"]["Row"] | Record<string, unknown>,
+  parentLookup?: ParentLookup | null,
+): StudentListItem {
   const record = row as Record<string, unknown>;
   return {
     id: asString(record.id, crypto.randomUUID()),
-    fullName: asString(record.full_name ?? record.fullName, "Ø·Ø§Ù„Ø¨ ØºÙŠØ± Ù…Ø­Ø¯Ø¯"),
+    fullName: asString(record.full_name ?? record.fullName, "\u0637\u0627\u0644\u0628 \u063a\u064a\u0631 \u0645\u062d\u062f\u062f"),
     age: asNumber(record.age, 0),
     parentId: asNullableString(record.parent_id ?? record.parentId),
-    parentName: asString(record.parent_name ?? record.parentName, "ÙˆÙ„ÙŠ Ø£Ù…Ø± ØºÙŠØ± Ù…Ø­Ø¯Ø¯"),
-    parentPhone: asString(record.parent_phone ?? record.parentPhone, "â€”"),
+    parentName: asString(parentLookup?.full_name ?? record.parentName, "\u0648\u0644\u064a \u0623\u0645\u0631 \u063a\u064a\u0631 \u0645\u062d\u062f\u062f"),
+    parentPhone: asString(parentLookup?.phone ?? record.parentPhone, "\u2013"),
     status: asStatus(record.status),
     currentCourse: (typeof (record.current_course ?? record.currentCourse) === "string"
       ? (record.current_course ?? record.currentCourse)
       : null) as StudentListItem["currentCourse"],
-    className: typeof (record.class_name ?? record.className) === "string" ? (record.class_name ?? record.className) as string : null,
+    className: null,
     enrollmentDate: asString(record.enrollment_date ?? record.enrollmentDate, new Date().toISOString()),
     sessionsAttended: asNumber(record.sessions_attended ?? record.sessionsAttended, 0),
     totalPaid: asNumber(record.total_paid ?? record.totalPaid, 0),
@@ -81,13 +89,11 @@ function clearLocalStudents(): void {
 
 function findExistingStudent(items: StudentListItem[], input: CreateStudentInput): StudentListItem | null {
   const studentName = normalizeName(input.fullName);
-  const parentName = normalizeName(input.parentName);
-  const parentPhone = normalizePhone(input.parentPhone);
+  const parentId = input.parentId;
 
   return (
-    items.find((student) => input.parentId && student.parentId === input.parentId && normalizeName(student.fullName) === studentName) ??
-    items.find((student) => normalizeName(student.fullName) === studentName && parentPhone.length > 0 && normalizePhone(student.parentPhone) === parentPhone) ??
-    items.find((student) => normalizeName(student.fullName) === studentName && normalizeName(student.parentName) === parentName) ??
+    items.find((student) => parentId && student.parentId === parentId && normalizeName(student.fullName) === studentName) ??
+    items.find((student) => normalizeName(student.fullName) === studentName && student.parentId === parentId) ??
     null
   );
 }
@@ -100,23 +106,30 @@ export async function listStudents(): Promise<StudentListItem[]> {
   }
 
   try {
-    const { data, error } = await supabase
-      .from("students")
-      .select("*")
-      .order("enrollment_date", { ascending: false });
+    const [studentsRes, parentsRes] = await Promise.all([
+      supabase.from("students").select("*").order("enrollment_date", { ascending: false }),
+      supabase.from("parents").select("id, full_name, phone"),
+    ]);
 
-    if (error) {
-      console.error("[students] failed to load from Supabase", error);
+    if (studentsRes.error) {
+      console.error("[students] failed to load from Supabase", studentsRes.error);
       clearLocalStudents();
       return [];
     }
 
-    if (!data || data.length === 0) {
+    if (!studentsRes.data || studentsRes.data.length === 0) {
       clearLocalStudents();
       return [];
     }
 
-    const mapped = data.map((row: Database["public"]["Tables"]["students"]["Row"]) => mapRow(row));
+    const parentsMap = new Map<string, ParentLookup>();
+    (parentsRes.data ?? []).forEach((p) => parentsMap.set(p.id, { full_name: p.full_name, phone: p.phone }));
+
+    const mapped = studentsRes.data.map((row) => {
+      const parentInfo = row.parent_id ? parentsMap.get(row.parent_id) ?? null : null;
+      return mapRow(row, parentInfo);
+    });
+
     saveLocalStudents(mapped);
     return mapped;
   } catch (error) {
@@ -133,20 +146,22 @@ export async function getStudentById(id: string): Promise<StudentListItem | null
 
 export async function createStudent(input: CreateStudentInput): Promise<StudentListItem> {
   const fullName = input.fullName.trim();
-  const parentName = input.parentName.trim();
-  const parentPhone = input.parentPhone.trim();
 
-  if (!fullName || !parentName || !parentPhone) {
-    throw new Error("Ø§Ø³Ù… Ø§Ù„Ø·Ø§Ù„Ø¨ ÙˆØ¨ÙŠØ§Ù†Ø§Øª ÙˆÙ„ÙŠ Ø§Ù„Ø£Ù…Ø± Ø§Ù„Ø£Ø³Ø§Ø³ÙŠØ© Ù…Ø·Ù„ÙˆØ¨Ø©.");
+  if (!fullName) {
+    throw new Error("\u0627\u0633\u0645 \u0627\u0644\u0637\u0627\u0644\u0628 \u0645\u0637\u0644\u0648\u0628.");
+  }
+
+  if (!input.parentId) {
+    throw new Error("\u064a\u062c\u0628 \u0631\u0628\u0637 \u0627\u0644\u0637\u0627\u0644\u0628 \u0628\u0648\u0644\u064a \u0623\u0645\u0631.");
   }
 
   if (!Number.isFinite(input.age) || input.age < 4 || input.age > 18) {
-    throw new Error("Ø¹Ù…Ø± Ø§Ù„Ø·Ø§Ù„Ø¨ ÙŠØ¬Ø¨ Ø£Ù† ÙŠÙƒÙˆÙ† Ø¨ÙŠÙ† 4 Ùˆ18 Ø³Ù†Ø©.");
+    throw new Error("\u0639\u0645\u0631 \u0627\u0644\u0637\u0627\u0644\u0628 \u064a\u062c\u0628 \u0623\u0646 \u064a\u0643\u0648\u0646 \u0628\u064a\u0646 4 \u064818 \u0633\u0646\u0629.");
   }
 
   const supabase = getSupabaseClient();
   if (!supabase) {
-    throw new Error("ØªØ¹Ø°Ø± Ø§Ù„Ø§ØªØµØ§Ù„ Ø¨Ù‚Ø§Ø¹Ø¯Ø© Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª. ØªØ£ÙƒØ¯ Ù…Ù† Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª Supabase Ø«Ù… Ø£Ø¹Ø¯ Ø§Ù„Ù…Ø­Ø§ÙˆÙ„Ø©.");
+    throw new Error("\u062a\u0639\u0630\u0631 \u0627\u0644\u0627\u062a\u0635\u0627\u0644 \u0628\u0642\u0627\u0639\u062f\u0629 \u0627\u0644\u0628\u064a\u0627\u0646\u0627\u062a.");
   }
 
   const existing = findExistingStudent(await listStudents(), input);
@@ -157,13 +172,12 @@ export async function createStudent(input: CreateStudentInput): Promise<StudentL
   const payload: Database["public"]["Tables"]["students"]["Insert"] = {
     full_name: fullName,
     age: input.age,
-    parent_id: input.parentId || "",
-            status: input.status ?? "active",
+    parent_id: input.parentId,
+    status: input.status ?? "active",
     current_course: input.currentCourse ?? null,
-        enrollment_date: input.enrollmentDate ?? new Date().toISOString(),
+    enrollment_date: input.enrollmentDate ?? new Date().toISOString().split("T")[0],
     sessions_attended: input.sessionsAttended ?? 0,
     total_paid: input.totalPaid ?? 0,
-    created_at: new Date().toISOString(),
   };
 
   const { data, error } = await supabase
@@ -174,13 +188,16 @@ export async function createStudent(input: CreateStudentInput): Promise<StudentL
 
   if (error || !data) {
     console.error("[students] create failed", error);
-    throw new Error(error?.message || "ØªØ¹Ø°Ø± Ø¥Ù†Ø´Ø§Ø¡ Ø³Ø¬Ù„ Ø§Ù„Ø·Ø§Ù„Ø¨.");
+    throw new Error(error?.message || "\u062a\u0639\u0630\u0631 \u0625\u0646\u0634\u0627\u0621 \u0633\u062c\u0644 \u0627\u0644\u0637\u0627\u0644\u0628.");
   }
 
-  const created = mapRow(data);
+  const { data: parentData } = await supabase
+    .from("parents")
+    .select("full_name, phone")
+    .eq("id", input.parentId)
+    .maybeSingle();
+
+  const created = mapRow(data, parentData);
   saveLocalStudents([created, ...getLocalStudents().filter((item) => item.id !== created.id)]);
   return created;
 }
-
-
-

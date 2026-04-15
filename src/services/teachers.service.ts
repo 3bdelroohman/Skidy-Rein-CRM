@@ -153,19 +153,52 @@ export async function createTeacher(input: CreateTeacherInput): Promise<TeacherL
 }
 
 
+
 export async function deleteTeacher(id: string): Promise<boolean> {
   const supabase = getSupabaseClient();
   if (!supabase) {
-    throw new Error("ØªØ¹Ø°Ø± Ø§Ù„Ø§ØªØµØ§Ù„ Ø¨Ù‚Ø§Ø¹Ø¯Ø© Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª. Ø£Ø¹Ø¯ Ø§Ù„Ù…Ø­Ø§ÙˆÙ„Ø© Ø¨Ø¹Ø¯ ØªØ³Ø¬ÙŠÙ„ Ø§Ù„Ø¯Ø®ÙˆÙ„ Ø£Ùˆ Ø§Ù„ØªØ­Ù‚Ù‚ Ù…Ù† Ø§Ù„Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª.");
+    throw new Error("\u062a\u0639\u0630\u0631 \u0627\u0644\u0627\u062a\u0635\u0627\u0644 \u0628\u0642\u0627\u0639\u062f\u0629 \u0627\u0644\u0628\u064a\u0627\u0646\u0627\u062a.");
+  }
+
+  // Check for linked classes first
+  const { data: linkedClasses } = await supabase
+    .from("classes")
+    .select("id")
+    .eq("teacher_id", id)
+    .eq("is_active", true)
+    .limit(1);
+
+  if (linkedClasses && linkedClasses.length > 0) {
+    throw new Error("\u0644\u0627 \u064a\u0645\u0643\u0646 \u062d\u0630\u0641 \u0627\u0644\u0645\u062f\u0631\u0633 \u0644\u0623\u0646 \u0644\u062f\u064a\u0647 \u0641\u0635\u0648\u0644 \u0646\u0634\u0637\u0629. \u0623\u0644\u063a\u0650 \u0627\u0644\u0641\u0635\u0648\u0644 \u0623\u0648\u0644\u0627\u064b.");
+  }
+
+  // Verify teacher exists before delete
+  const { data: before } = await supabase
+    .from("teachers")
+    .select("id")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!before) {
+    throw new Error("\u0627\u0644\u0645\u062f\u0631\u0633 \u063a\u064a\u0631 \u0645\u0648\u062c\u0648\u062f \u0623\u0648 \u062a\u0645 \u062d\u0630\u0641\u0647 \u0645\u0633\u0628\u0642\u0627\u064b.");
   }
 
   const { error } = await supabase.from("teachers").delete().eq("id", id);
   if (error) {
-    throw new Error(error.message || "ØªØ¹Ø°Ø± Ø­Ø°Ù Ø§Ù„Ù…Ø¯Ø±Ø³");
+    throw new Error(error.message || "\u062a\u0639\u0630\u0631 \u062d\u0630\u0641 \u0627\u0644\u0645\u062f\u0631\u0633.");
+  }
+
+  // Verify deletion actually happened
+  const { data: after } = await supabase
+    .from("teachers")
+    .select("id")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (after) {
+    throw new Error("\u0641\u0634\u0644 \u0627\u0644\u062d\u0630\u0641: \u0627\u0644\u0645\u062f\u0631\u0633 \u0644\u0627 \u064a\u0632\u0627\u0644 \u0645\u0648\u062c\u0648\u062f\u0627\u064b. \u062a\u062d\u0642\u0642 \u0645\u0646 \u0635\u0644\u0627\u062d\u064a\u0627\u062a RLS.");
   }
 
   saveLocalTeachers(getLocalTeachers().filter((teacher) => teacher.id !== id));
   return true;
 }
-
-
