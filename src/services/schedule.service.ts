@@ -1,4 +1,4 @@
-﻿import { createBrowserClient } from "@supabase/ssr";
+import { createBrowserClient } from "@supabase/ssr";
 import type { CourseType } from "@/types/common.types";
 import type { Database } from "@/types/database.types";
 import type { CreateScheduleEntryInput, ParentListItem, ScheduleSessionDetails, ScheduleSessionItem, StudentListItem, TeacherListItem } from "@/types/crm";
