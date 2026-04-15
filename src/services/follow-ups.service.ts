@@ -1,4 +1,4 @@
-import { createBrowserClient } from "@supabase/ssr";
+﻿import { createBrowserClient } from "@supabase/ssr";
 import type { CommChannel, FollowUpType, LeadStage, Priority } from "@/types/common.types";
 import type { Database } from "@/types/database.types";
 import type { CreateFollowUpInput, FollowUpItem, LeadActivityItem, LeadListItem } from "@/types/crm";
@@ -75,15 +75,15 @@ function mapRow(row: Database["public"]["Tables"]["follow_ups"]["Row"] | Record<
   return {
     id: asString(record.id, crypto.randomUUID()),
     leadId: typeof record.lead_id === "string" ? record.lead_id : null,
-    title: asString(record.title, "متابعة"),
-    leadName: asString(record.lead_name ?? record.leadName, "عميل غير محدد"),
-    parentName: asString(record.parent_name ?? record.parentName, "ولي أمر غير محدد"),
+    title: asString(record.title, "Ù…ØªØ§Ø¨Ø¹Ø©"),
+    leadName: asString(record.lead_name ?? record.leadName, "Ø¹Ù…ÙŠÙ„ ØºÙŠØ± Ù…Ø­Ø¯Ø¯"),
+    parentName: asString(record.parent_name ?? record.parentName, "ÙˆÙ„ÙŠ Ø£Ù…Ø± ØºÙŠØ± Ù…Ø­Ø¯Ø¯"),
     type: asType(record.type),
     channel: asChannel(record.channel),
     priority: asPriority(record.priority),
     scheduledAt,
     status: asStatus(record.status, scheduledAt),
-    assignedTo: asString(record.assigned_to ?? record.assignedTo, "غير مخصص"),
+    assignedTo: asString(record.assigned_to ?? record.assignedTo, "ØºÙŠØ± Ù…Ø®ØµØµ"),
   };
 }
 
@@ -135,8 +135,7 @@ function createLeadActivity(leadId: string | null | undefined, action: string, b
     void supabase.from("lead_activities").insert({
       lead_id: leadId,
       action: activity.action,
-      by_name: activity.by,
-      type: activity.type,
+            type: activity.type,
       created_at: activity.date,
     });
   }
@@ -267,8 +266,8 @@ export async function createFollowUp(input: CreateFollowUpInput): Promise<Follow
   const next = [...current, item];
   saveLocalFollowUps(next);
 
-  const typeLabel = item.type === "trial_reminder" ? "تذكير بالسيشن التجريبية" : item.title;
-  createLeadActivity(item.leadId, `تم إنشاء متابعة جديدة: ${typeLabel}`, item.assignedTo, "contact");
+  const typeLabel = item.type === "trial_reminder" ? "ØªØ°ÙƒÙŠØ± Ø¨Ø§Ù„Ø³ÙŠØ´Ù† Ø§Ù„ØªØ¬Ø±ÙŠØ¨ÙŠØ©" : item.title;
+  createLeadActivity(item.leadId, `ØªÙ… Ø¥Ù†Ø´Ø§Ø¡ Ù…ØªØ§Ø¨Ø¹Ø© Ø¬Ø¯ÙŠØ¯Ø©: ${typeLabel}`, item.assignedTo, "contact");
   await syncLeadNextFollowUp(item.leadId, next);
 
   const supabase = getSupabaseClient();
@@ -284,8 +283,7 @@ export async function createFollowUp(input: CreateFollowUpInput): Promise<Follow
         lead_id: item.leadId,
         title: item.title,
         lead_name: item.leadName,
-        parent_name: item.parentName,
-        type: item.type,
+                type: item.type,
         channel: item.channel,
         priority: item.priority,
         scheduled_at: item.scheduledAt,
@@ -326,8 +324,8 @@ async function updateFollowUpStatus(
 
   if (updated.leadId) {
     const action = nextStatus === "completed"
-      ? `تم إنهاء متابعة ${updated.title}`
-      : `تمت إعادة فتح متابعة ${updated.title}`;
+      ? `ØªÙ… Ø¥Ù†Ù‡Ø§Ø¡ Ù…ØªØ§Ø¨Ø¹Ø© ${updated.title}`
+      : `ØªÙ…Øª Ø¥Ø¹Ø§Ø¯Ø© ÙØªØ­ Ù…ØªØ§Ø¨Ø¹Ø© ${updated.title}`;
     createLeadActivity(updated.leadId, action, updated.assignedTo, nextStatus === "completed" ? "contact" : "note");
   }
 
@@ -387,20 +385,21 @@ export function suggestFollowUpTypeByStage(stage: LeadStage): FollowUpType {
 export function suggestFollowUpTitle(stage: LeadStage, childName: string): string {
   switch (stage) {
     case "new":
-      return `أول تواصل — ${childName}`;
+      return `Ø£ÙˆÙ„ ØªÙˆØ§ØµÙ„ â€” ${childName}`;
     case "qualified":
-      return `استكمال التأهيل — ${childName}`;
+      return `Ø§Ø³ØªÙƒÙ…Ø§Ù„ Ø§Ù„ØªØ£Ù‡ÙŠÙ„ â€” ${childName}`;
     case "trial_proposed":
-      return `تأكيد موعد السيشن — ${childName}`;
+      return `ØªØ£ÙƒÙŠØ¯ Ù…ÙˆØ¹Ø¯ Ø§Ù„Ø³ÙŠØ´Ù† â€” ${childName}`;
     case "trial_booked":
-      return `تذكير بالسيشن — ${childName}`;
+      return `ØªØ°ÙƒÙŠØ± Ø¨Ø§Ù„Ø³ÙŠØ´Ù† â€” ${childName}`;
     case "trial_attended":
-      return `متابعة بعد السيشن — ${childName}`;
+      return `Ù…ØªØ§Ø¨Ø¹Ø© Ø¨Ø¹Ø¯ Ø§Ù„Ø³ÙŠØ´Ù† â€” ${childName}`;
     case "offer_sent":
-      return `متابعة العرض — ${childName}`;
+      return `Ù…ØªØ§Ø¨Ø¹Ø© Ø§Ù„Ø¹Ø±Ø¶ â€” ${childName}`;
     case "lost":
-      return `إعادة تواصل — ${childName}`;
+      return `Ø¥Ø¹Ø§Ø¯Ø© ØªÙˆØ§ØµÙ„ â€” ${childName}`;
     default:
-      return `متابعة الدفع — ${childName}`;
+      return `Ù…ØªØ§Ø¨Ø¹Ø© Ø§Ù„Ø¯ÙØ¹ â€” ${childName}`;
   }
 }
+

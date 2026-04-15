@@ -1,4 +1,4 @@
-import { createBrowserClient } from "@supabase/ssr";
+﻿import { createBrowserClient } from "@supabase/ssr";
 import type { StudentStatus } from "@/types/common.types";
 import type { Database } from "@/types/database.types";
 import type { CreateStudentInput, StudentListItem } from "@/types/crm";
@@ -51,11 +51,11 @@ function mapRow(row: Database["public"]["Tables"]["students"]["Row"] | Record<st
   const record = row as Record<string, unknown>;
   return {
     id: asString(record.id, crypto.randomUUID()),
-    fullName: asString(record.full_name ?? record.fullName, "طالب غير محدد"),
+    fullName: asString(record.full_name ?? record.fullName, "Ø·Ø§Ù„Ø¨ ØºÙŠØ± Ù…Ø­Ø¯Ø¯"),
     age: asNumber(record.age, 0),
     parentId: asNullableString(record.parent_id ?? record.parentId),
-    parentName: asString(record.parent_name ?? record.parentName, "ولي أمر غير محدد"),
-    parentPhone: asString(record.parent_phone ?? record.parentPhone, "—"),
+    parentName: asString(record.parent_name ?? record.parentName, "ÙˆÙ„ÙŠ Ø£Ù…Ø± ØºÙŠØ± Ù…Ø­Ø¯Ø¯"),
+    parentPhone: asString(record.parent_phone ?? record.parentPhone, "â€”"),
     status: asStatus(record.status),
     currentCourse: (typeof (record.current_course ?? record.currentCourse) === "string"
       ? (record.current_course ?? record.currentCourse)
@@ -137,16 +137,16 @@ export async function createStudent(input: CreateStudentInput): Promise<StudentL
   const parentPhone = input.parentPhone.trim();
 
   if (!fullName || !parentName || !parentPhone) {
-    throw new Error("اسم الطالب وبيانات ولي الأمر الأساسية مطلوبة.");
+    throw new Error("Ø§Ø³Ù… Ø§Ù„Ø·Ø§Ù„Ø¨ ÙˆØ¨ÙŠØ§Ù†Ø§Øª ÙˆÙ„ÙŠ Ø§Ù„Ø£Ù…Ø± Ø§Ù„Ø£Ø³Ø§Ø³ÙŠØ© Ù…Ø·Ù„ÙˆØ¨Ø©.");
   }
 
   if (!Number.isFinite(input.age) || input.age < 4 || input.age > 18) {
-    throw new Error("عمر الطالب يجب أن يكون بين 4 و18 سنة.");
+    throw new Error("Ø¹Ù…Ø± Ø§Ù„Ø·Ø§Ù„Ø¨ ÙŠØ¬Ø¨ Ø£Ù† ÙŠÙƒÙˆÙ† Ø¨ÙŠÙ† 4 Ùˆ18 Ø³Ù†Ø©.");
   }
 
   const supabase = getSupabaseClient();
   if (!supabase) {
-    throw new Error("تعذر الاتصال بقاعدة البيانات. تأكد من إعدادات Supabase ثم أعد المحاولة.");
+    throw new Error("ØªØ¹Ø°Ø± Ø§Ù„Ø§ØªØµØ§Ù„ Ø¨Ù‚Ø§Ø¹Ø¯Ø© Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª. ØªØ£ÙƒØ¯ Ù…Ù† Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª Supabase Ø«Ù… Ø£Ø¹Ø¯ Ø§Ù„Ù…Ø­Ø§ÙˆÙ„Ø©.");
   }
 
   const existing = findExistingStudent(await listStudents(), input);
@@ -157,13 +157,10 @@ export async function createStudent(input: CreateStudentInput): Promise<StudentL
   const payload: Database["public"]["Tables"]["students"]["Insert"] = {
     full_name: fullName,
     age: input.age,
-    parent_id: input.parentId ?? null,
-    parent_name: parentName,
-    parent_phone: parentPhone,
-    status: input.status ?? "active",
+    parent_id: input.parentId || "",
+            status: input.status ?? "active",
     current_course: input.currentCourse ?? null,
-    class_name: input.className ?? null,
-    enrollment_date: input.enrollmentDate ?? new Date().toISOString(),
+        enrollment_date: input.enrollmentDate ?? new Date().toISOString(),
     sessions_attended: input.sessionsAttended ?? 0,
     total_paid: input.totalPaid ?? 0,
     created_at: new Date().toISOString(),
@@ -177,10 +174,13 @@ export async function createStudent(input: CreateStudentInput): Promise<StudentL
 
   if (error || !data) {
     console.error("[students] create failed", error);
-    throw new Error(error?.message || "تعذر إنشاء سجل الطالب.");
+    throw new Error(error?.message || "ØªØ¹Ø°Ø± Ø¥Ù†Ø´Ø§Ø¡ Ø³Ø¬Ù„ Ø§Ù„Ø·Ø§Ù„Ø¨.");
   }
 
   const created = mapRow(data);
   saveLocalStudents([created, ...getLocalStudents().filter((item) => item.id !== created.id)]);
   return created;
 }
+
+
+

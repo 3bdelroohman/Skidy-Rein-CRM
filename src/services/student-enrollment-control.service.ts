@@ -1,4 +1,4 @@
-import { createBrowserClient } from "@supabase/ssr";
+﻿import { createBrowserClient } from "@supabase/ssr";
 import { getCourseFormLabel } from "@/config/course-roadmap";
 import { listScheduleSessions } from "@/services/schedule.service";
 import { getStudentById } from "@/services/students.service";
@@ -29,12 +29,12 @@ function uniqueKey(className: string, course: CourseType, teacherId: string | nu
 }
 
 function mapOptionLabel(option: EnrollmentClassOption, locale: "ar" | "en"): string {
-  const dayLabelsAr = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+  const dayLabelsAr = ["Ø§Ù„Ø£Ø­Ø¯", "Ø§Ù„Ø§Ø«Ù†ÙŠÙ†", "Ø§Ù„Ø«Ù„Ø§Ø«Ø§Ø¡", "Ø§Ù„Ø£Ø±Ø¨Ø¹Ø§Ø¡", "Ø§Ù„Ø®Ù…ÙŠØ³", "Ø§Ù„Ø¬Ù…Ø¹Ø©", "Ø§Ù„Ø³Ø¨Øª"];
   const dayLabelsEn = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const day = locale === "ar" ? dayLabelsAr[option.day] ?? option.day : dayLabelsEn[option.day] ?? option.day;
   return locale === "ar"
-    ? `${option.className} — ${getCourseFormLabel(option.course, locale)} — ${option.teacherName} — ${day} ${option.startTime}`
-    : `${option.className} — ${getCourseFormLabel(option.course, locale)} — ${option.teacherName} — ${day} ${option.startTime}`;
+    ? `${option.className} â€” ${getCourseFormLabel(option.course, locale)} â€” ${option.teacherName} â€” ${day} ${option.startTime}`
+    : `${option.className} â€” ${getCourseFormLabel(option.course, locale)} â€” ${option.teacherName} â€” ${day} ${option.startTime}`;
 }
 
 export function getEnrollmentOptionLabel(option: EnrollmentClassOption, locale: "ar" | "en"): string {
@@ -70,21 +70,24 @@ export async function listEnrollmentClassOptions(preferredCourse?: CourseType | 
   });
 }
 
-export async function updateStudentEnrollment(studentId: string, input: { className: string | null; currentCourse: CourseType | null; }): Promise<StudentListItem | null> {
+export async function updateStudentEnrollment(studentId: string, input: { classId: string | null; currentCourse: CourseType | null; }): Promise<StudentListItem | null> {
   const supabase = getSupabaseClient();
   if (!supabase) {
-    throw new Error("تعذر الاتصال بقاعدة البيانات. تأكد من إعدادات Supabase ثم أعد المحاولة.");
+    throw new Error("ØªØ¹Ø°Ø± Ø§Ù„Ø§ØªØµØ§Ù„ Ø¨Ù‚Ø§Ø¹Ø¯Ø© Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª. ØªØ£ÙƒØ¯ Ù…Ù† Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª Supabase Ø«Ù… Ø£Ø¹Ø¯ Ø§Ù„Ù…Ø­Ø§ÙˆÙ„Ø©.");
   }
 
   const payload: Database["public"]["Tables"]["students"]["Update"] = {
-    class_name: input.className,
+    current_class_id: input.classId ?? null,
     current_course: input.currentCourse,
   };
 
   const { error } = await supabase.from("students").update(payload).eq("id", studentId);
   if (error) {
-    throw new Error(error.message || "تعذر تحديث ربط الطالب بالكلاس.");
+    throw new Error(error.message || "ØªØ¹Ø°Ø± ØªØ­Ø¯ÙŠØ« Ø±Ø¨Ø· Ø§Ù„Ø·Ø§Ù„Ø¨ Ø¨Ø§Ù„ÙƒÙ„Ø§Ø³.");
   }
 
   return getStudentById(studentId);
 }
+
+
+

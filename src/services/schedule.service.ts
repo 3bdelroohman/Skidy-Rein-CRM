@@ -1,4 +1,4 @@
-import { createBrowserClient } from "@supabase/ssr";
+﻿import { createBrowserClient } from "@supabase/ssr";
 import type { CourseType } from "@/types/common.types";
 import type { Database } from "@/types/database.types";
 import type { CreateScheduleEntryInput, ParentListItem, ScheduleSessionDetails, ScheduleSessionItem, StudentListItem, TeacherListItem } from "@/types/crm";
@@ -12,12 +12,12 @@ const ALLOW_DEMO = process.env.NEXT_PUBLIC_ALLOW_DEMO_FALLBACK === "true";
 const VALID_COURSES: CourseType[] = ["scratch", "python", "web", "ai"];
 
 const DEFAULT_SCHEDULE: ScheduleSessionItem[] = [
-  { id: "1", classId: "class-1", teacherId: "1", day: 0, startTime: "16:00", endTime: "17:00", className: "Scratch A", teacher: "أ. محمود", students: 5, course: "scratch", sessionDate: null },
-  { id: "2", classId: "class-2", teacherId: "2", day: 0, startTime: "17:30", endTime: "18:30", className: "Python A", teacher: "أ. دينا", students: 4, course: "python", sessionDate: null },
-  { id: "3", classId: "class-3", teacherId: "3", day: 1, startTime: "16:00", endTime: "17:00", className: "Scratch B", teacher: "أ. كريم", students: 6, course: "scratch", sessionDate: null },
-  { id: "4", classId: "class-4", teacherId: "2", day: 2, startTime: "18:00", endTime: "19:00", className: "AI Intro", teacher: "أ. دينا", students: 3, course: "ai", sessionDate: null },
-  { id: "5", classId: "class-5", teacherId: "3", day: 3, startTime: "17:00", endTime: "18:00", className: "Web Starters", teacher: "أ. كريم", students: 4, course: "web", sessionDate: null },
-  { id: "6", classId: "class-6", teacherId: "1", day: 4, startTime: "16:30", endTime: "17:30", className: "Scratch Trial", teacher: "أ. محمود", students: 5, course: "scratch", sessionDate: null },
+  { id: "1", classId: "class-1", teacherId: "1", day: 0, startTime: "16:00", endTime: "17:00", className: "Scratch A", teacher: "Ø£. Ù…Ø­Ù…ÙˆØ¯", students: 5, course: "scratch", sessionDate: null },
+  { id: "2", classId: "class-2", teacherId: "2", day: 0, startTime: "17:30", endTime: "18:30", className: "Python A", teacher: "Ø£. Ø¯ÙŠÙ†Ø§", students: 4, course: "python", sessionDate: null },
+  { id: "3", classId: "class-3", teacherId: "3", day: 1, startTime: "16:00", endTime: "17:00", className: "Scratch B", teacher: "Ø£. ÙƒØ±ÙŠÙ…", students: 6, course: "scratch", sessionDate: null },
+  { id: "4", classId: "class-4", teacherId: "2", day: 2, startTime: "18:00", endTime: "19:00", className: "AI Intro", teacher: "Ø£. Ø¯ÙŠÙ†Ø§", students: 3, course: "ai", sessionDate: null },
+  { id: "5", classId: "class-5", teacherId: "3", day: 3, startTime: "17:00", endTime: "18:00", className: "Web Starters", teacher: "Ø£. ÙƒØ±ÙŠÙ…", students: 4, course: "web", sessionDate: null },
+  { id: "6", classId: "class-6", teacherId: "1", day: 4, startTime: "16:30", endTime: "17:30", className: "Scratch Trial", teacher: "Ø£. Ù…Ø­Ù…ÙˆØ¯", students: 5, course: "scratch", sessionDate: null },
 ];
 
 type RawClassRow = {
@@ -89,7 +89,7 @@ function asCourse(value: unknown, fallback: CourseType = "scratch"): CourseType 
 function normalizeName(value: string | null | undefined): string {
   return (value ?? "")
     .toLowerCase()
-    .replace(/أ\.?\s*/g, "")
+    .replace(/Ø£\.?\s*/g, "")
     .replace(/[\u064B-\u065F]/g, "")
     .replace(/\s+/g, " ")
     .trim();
@@ -146,7 +146,7 @@ function mapSessionFromClass(
     startTime: asString(row.start_time, "16:00"),
     endTime: asString(row.end_time, "17:00"),
     className: asString(row.name, "Class"),
-    teacher: teacher?.fullName ?? "مدرس غير محدد",
+    teacher: teacher?.fullName ?? "Ù…Ø¯Ø±Ø³ ØºÙŠØ± Ù…Ø­Ø¯Ø¯",
     students: enrollmentCount,
     course: asCourse(row.course),
     sessionDate: null,
@@ -171,7 +171,7 @@ function mapSessionFromSession(
     startTime: asString(row.start_time ?? classRow?.start_time, "16:00"),
     endTime: asString(row.end_time ?? classRow?.end_time, "17:00"),
     className: asString(row.title ?? classRow?.name, "Session"),
-    teacher: teacher?.fullName ?? "مدرس غير محدد",
+    teacher: teacher?.fullName ?? "Ù…Ø¯Ø±Ø³ ØºÙŠØ± Ù…Ø­Ø¯Ø¯",
     students: studentsCount,
     course: asCourse(classRow?.course, "scratch"),
     sessionDate: asNullableString(row.session_date),
@@ -331,13 +331,13 @@ export async function getScheduleOverview(): Promise<{
 export async function createScheduleEntry(input: CreateScheduleEntryInput): Promise<ScheduleSessionItem> {
   const supabase = getSupabaseClient();
   if (!supabase) {
-    throw new Error("تعذر الاتصال بقاعدة البيانات. أعد المحاولة بعد تسجيل الدخول أو التحقق من الإعدادات.");
+    throw new Error("Supabase client not available. Login first.");
   }
 
   const teachers = await listTeachers();
   const teacher = teachers.find((item) => item.id === input.teacherId) ?? null;
   if (!teacher) {
-    throw new Error("اختر مدرسًا صحيحًا قبل حفظ الحصة.");
+    throw new Error("Select a valid teacher before saving.");
   }
 
   const existing = await listScheduleSessions();
@@ -351,26 +351,71 @@ export async function createScheduleEntry(input: CreateScheduleEntryInput): Prom
   });
 
   if (clash) {
-    throw new Error(`يوجد تعارض مع ${clash.className} لنفس المدرس في هذا التوقيت.`);
+    throw new Error("Schedule conflict with " + clash.className + " for the same teacher.");
   }
 
-  const payload: Database["public"]["Tables"]["classes"]["Insert"] = {
-    name: input.className,
-    teacher_id: input.teacherId,
-    start_time: input.startTime,
-    end_time: input.endTime,
-    is_active: true,
-    created_at: new Date().toISOString(),
-  };
+  // Look up course_id from courses table using course type
+  const { data: courses } = await supabase
+    .from("courses")
+    .select("id")
+    .eq("type", input.course)
+    .eq("is_active", true)
+    .limit(1);
+  const courseId = courses?.[0]?.id ?? null;
+  if (!courseId) {
+    throw new Error("Course type not found in courses table. Make sure it exists.");
+  }
 
-  const { data, error } = await supabase.from("classes").insert(payload).select("*").single();
-  if (error || !data) {
-    throw new Error(error?.message || "تعذر إنشاء الحصة في الجدول");
+  // Calculate session_date from day-of-week number
+  const today = new Date();
+  const currentDay = today.getDay();
+  const targetDay = input.day;
+  const daysUntil = (targetDay - currentDay + 7) % 7;
+  const sessionDate = new Date(today);
+  sessionDate.setDate(today.getDate() + (daysUntil === 0 ? 0 : daysUntil));
+  const sessionDateStr = sessionDate.toISOString().split("T")[0];
+
+  // Step 1: Create class (NO time fields - those belong to sessions)
+  const { data: classData, error: classError } = await supabase
+    .from("classes")
+    .insert({
+      name: input.className,
+      course_id: courseId,
+      teacher_id: input.teacherId,
+      max_students: 10,
+      current_students: 0,
+      start_date: sessionDateStr,
+      is_active: true,
+    })
+    .select("*")
+    .single();
+
+  if (classError || !classData) {
+    throw new Error(classError?.message || "Failed to create class");
+  }
+
+  // Step 2: Create session WITH time fields
+  const { data: sessionData, error: sessionError } = await supabase
+    .from("sessions")
+    .insert({
+      class_id: classData.id,
+      teacher_id: input.teacherId,
+      session_date: sessionDateStr,
+      start_time: input.startTime,
+      end_time: input.endTime,
+    })
+    .select("*")
+    .single();
+
+  if (sessionError || !sessionData) {
+    // Rollback: delete the class we just created
+    await supabase.from("classes").delete().eq("id", classData.id);
+    throw new Error(sessionError?.message || "Failed to create session");
   }
 
   const created: ScheduleSessionItem = {
-    id: asString((data as Record<string, unknown>).id, crypto.randomUUID()),
-    classId: asNullableString((data as Record<string, unknown>).id),
+    id: sessionData.id,
+    classId: classData.id,
     teacherId: input.teacherId,
     day: input.day,
     startTime: input.startTime,
@@ -379,9 +424,11 @@ export async function createScheduleEntry(input: CreateScheduleEntryInput): Prom
     teacher: teacher.fullName,
     students: 0,
     course: input.course,
-    sessionDate: null,
+    sessionDate: sessionDateStr,
   };
 
   saveLocalSchedule([created, ...getLocalSchedule().filter((item) => item.id !== created.id)]);
   return created;
 }
+
+

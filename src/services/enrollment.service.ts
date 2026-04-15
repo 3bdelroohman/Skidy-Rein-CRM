@@ -1,4 +1,4 @@
-import { createBrowserClient } from "@supabase/ssr";
+﻿import { createBrowserClient } from "@supabase/ssr";
 import type { Database } from "@/types/database.types";
 
 function getSupabaseClient() {
@@ -38,7 +38,7 @@ function sameName(a: string | null | undefined, b: string | null | undefined): b
 
 function requireParentIdentity(lead: LeadRow): void {
   if (!lead.parent_name || !lead.parent_phone) {
-    throw new Error("لا يمكن تحويل العميل الحالي لأن اسم ولي الأمر أو رقم الهاتف غير مكتمل.");
+    throw new Error("\u0644\u0627 \u064a\u0645\u0643\u0646 \u062a\u062d\u0648\u064a\u0644 \u0627\u0644\u0639\u0645\u064a\u0644 \u0627\u0644\u062d\u0627\u0644\u064a \u0644\u0623\u0646 \u0627\u0633\u0645 \u0648\u0644\u064a \u0627\u0644\u0623\u0645\u0631 \u0623\u0648 \u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062a\u0641 \u063a\u064a\u0631 \u0645\u0643\u062a\u0645\u0644.");
   }
 }
 
@@ -54,7 +54,7 @@ async function getLeadById(leadId: string, supabase: ReturnType<typeof getSupaba
     .maybeSingle();
 
   if (error || !data) {
-    throw new Error(error?.message || "تعذر العثور على العميل المحتمل المطلوب.");
+    throw new Error(error?.message || "\u062a\u0639\u0630\u0631 \u0627\u0644\u0639\u062b\u0648\u0631 \u0639\u0644\u0649 \u0627\u0644\u0639\u0645\u064a\u0644 \u0627\u0644\u0645\u062d\u062a\u0645\u0644 \u0627\u0644\u0645\u0637\u0644\u0648\u0628.");
   }
 
   return data as LeadRow;
@@ -72,24 +72,10 @@ function findParent(lead: LeadRow, parents: ParentRow[]): ParentRow | null {
 
 function findStudent(lead: LeadRow, parent: ParentRow, students: StudentRow[]): StudentRow | null {
   return (
-    students.find((student) => student.parent_id && student.parent_id === parent.id && sameName(student.full_name, lead.child_name)) ??
-    students.find((student) => sameName(student.full_name, lead.child_name) && samePhone(student.parent_phone, parent.phone ?? lead.parent_phone)) ??
-    students.find((student) => sameName(student.full_name, lead.child_name) && sameName(student.parent_name, parent.full_name ?? lead.parent_name)) ??
+    students.find((student) => student.parent_id === parent.id && sameName(student.full_name, lead.child_name)) ??
+    students.find((student) => sameName(student.full_name, lead.child_name) && student.parent_id === parent.id) ??
     null
   );
-}
-
-async function refreshParentChildrenCount(supabase: ReturnType<typeof getSupabaseClient>, parent: ParentRow, students: StudentRow[]) {
-  const linked = students.filter((student) => {
-    if (student.parent_id && parent.id && student.parent_id === parent.id) return true;
-    if (samePhone(student.parent_phone, parent.phone)) return true;
-    return sameName(student.parent_name, parent.full_name);
-  }).length;
-
-  await supabase!
-    .from("parents")
-    .update({ children_count: linked })
-    .eq("id", parent.id);
 }
 
 async function ensureLeadEnrollmentInternal(
@@ -109,14 +95,12 @@ async function ensureLeadEnrollmentInternal(
         full_name: lead.parent_name,
         phone: lead.parent_phone,
         whatsapp: lead.parent_whatsapp ?? lead.parent_phone,
-        children_count: 0,
-        created_at: new Date().toISOString(),
       })
       .select("*")
       .single();
 
     if (error || !data) {
-      throw new Error(error?.message || "تعذر إنشاء سجل ولي الأمر.");
+      throw new Error(error?.message || "\u062a\u0639\u0630\u0631 \u0625\u0646\u0634\u0627\u0621 \u0633\u062c\u0644 \u0648\u0644\u064a \u0627\u0644\u0623\u0645\u0631.");
     }
 
     parent = data as ParentRow;
@@ -132,21 +116,17 @@ async function ensureLeadEnrollmentInternal(
         full_name: lead.child_name,
         age: lead.child_age,
         parent_id: parent.id,
-        parent_name: parent.full_name,
-        parent_phone: parent.phone ?? lead.parent_phone,
-        status: "active",
+        status: "active" as const,
         current_course: lead.suggested_course ?? null,
-        class_name: null,
-        enrollment_date: lead.won_at ?? new Date().toISOString(),
+        enrollment_date: lead.won_at ?? new Date().toISOString().split("T")[0],
         sessions_attended: 0,
         total_paid: 0,
-        created_at: new Date().toISOString(),
       })
       .select("*")
       .single();
 
     if (error || !data) {
-      throw new Error(error?.message || "تعذر إنشاء سجل الطالب.");
+      throw new Error(error?.message || "\u062a\u0639\u0630\u0631 \u0625\u0646\u0634\u0627\u0621 \u0633\u062c\u0644 \u0627\u0644\u0637\u0627\u0644\u0628.");
     }
 
     student = data as StudentRow;
@@ -156,8 +136,6 @@ async function ensureLeadEnrollmentInternal(
       .from("students")
       .update({
         parent_id: parent.id,
-        parent_name: parent.full_name,
-        parent_phone: parent.phone ?? lead.parent_phone,
         current_course: student.current_course ?? lead.suggested_course ?? null,
       })
       .eq("id", student.id)
@@ -177,12 +155,9 @@ async function ensureLeadEnrollmentInternal(
       .update({
         parent_id: parent.id,
         won_at: lead.won_at ?? new Date().toISOString(),
-        updated_at: new Date().toISOString(),
       })
       .eq("id", lead.id);
   }
-
-  await refreshParentChildrenCount(supabase, parent, students);
 
   return { parentId: parent.id, studentId: student?.id ?? null };
 }
@@ -190,7 +165,7 @@ async function ensureLeadEnrollmentInternal(
 export async function ensureLeadEnrollment(leadId: string): Promise<{ parentId: string; studentId: string | null }> {
   const supabase = getSupabaseClient();
   if (!supabase) {
-    throw new Error("تعذر الاتصال بقاعدة البيانات. تأكد من إعدادات Supabase ثم أعد المحاولة.");
+    throw new Error("\u062a\u0639\u0630\u0631 \u0627\u0644\u0627\u062a\u0635\u0627\u0644 \u0628\u0642\u0627\u0639\u062f\u0629 \u0627\u0644\u0628\u064a\u0627\u0646\u0627\u062a. \u062a\u0623\u0643\u062f \u0645\u0646 \u0625\u0639\u062f\u0627\u062f\u0627\u062a Supabase \u062b\u0645 \u0623\u0639\u062f \u0627\u0644\u0645\u062d\u0627\u0648\u0644\u0629.");
   }
 
   const lead = await getLeadById(leadId, supabase);
@@ -200,7 +175,7 @@ export async function ensureLeadEnrollment(leadId: string): Promise<{ parentId: 
   ]);
 
   if (parentsError || studentsError) {
-    throw new Error(parentsError?.message || studentsError?.message || "تعذر تحميل بيانات الربط الحالية.");
+    throw new Error(parentsError?.message || studentsError?.message || "\u062a\u0639\u0630\u0631 \u062a\u062d\u0645\u064a\u0644 \u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u0631\u0628\u0637 \u0627\u0644\u062d\u0627\u0644\u064a\u0629.");
   }
 
   return ensureLeadEnrollmentInternal(lead, supabase, parents ?? [], students ?? []);
@@ -240,7 +215,6 @@ export async function syncWonLeadsToEnrollments(): Promise<number> {
 
   return repaired;
 }
-
 
 export async function getEnrollmentTargetsForLead(
   leadId: string,

@@ -1,4 +1,4 @@
-import { createBrowserClient } from "@supabase/ssr";
+﻿import { createBrowserClient } from "@supabase/ssr";
 import type { CourseType, EmploymentType } from "@/types/common.types";
 import type { CreateTeacherInput, TeacherListItem } from "@/types/crm";
 import type { Database } from "@/types/database.types";
@@ -72,13 +72,13 @@ function mapRow(row: Record<string, unknown>): TeacherListItem {
 
   return {
     id: asString(row.id, crypto.randomUUID()),
-    fullName: asString(row.full_name ?? row.fullName, "مدرس غير محدد"),
-    phone: asString(row.phone, fallback?.phone ?? "—"),
+    fullName: asString(row.full_name ?? row.fullName, "Ù…Ø¯Ø±Ø³ ØºÙŠØ± Ù…Ø­Ø¯Ø¯"),
+    phone: asString(row.phone, fallback?.phone ?? "â€”"),
     email: asString(row.email, fallback?.email ?? "") || null,
     specialization: asSpecialization(row.specialization, fallback?.specialization ?? []),
     employment: asEmployment(row.employment ?? fallback?.employment),
-    classesCount: asNumber(row.classes_count ?? row.classesCount, fallback?.classesCount ?? 0),
-    studentsCount: asNumber(row.students_count ?? row.studentsCount, fallback?.studentsCount ?? 0),
+    classesCount: 0,
+    studentsCount: 0,
     isActive: Boolean(row.is_active ?? row.isActive ?? fallback?.isActive ?? true),
   };
 }
@@ -115,7 +115,7 @@ export async function getTeacherById(id: string): Promise<TeacherListItem | null
 export async function createTeacher(input: CreateTeacherInput): Promise<TeacherListItem> {
   const supabase = getSupabaseClient();
   if (!supabase) {
-    throw new Error("تعذر الاتصال بقاعدة البيانات. أعد المحاولة بعد تسجيل الدخول أو التحقق من الإعدادات.");
+    throw new Error("ØªØ¹Ø°Ø± Ø§Ù„Ø§ØªØµØ§Ù„ Ø¨Ù‚Ø§Ø¹Ø¯Ø© Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª. Ø£Ø¹Ø¯ Ø§Ù„Ù…Ø­Ø§ÙˆÙ„Ø© Ø¨Ø¹Ø¯ ØªØ³Ø¬ÙŠÙ„ Ø§Ù„Ø¯Ø®ÙˆÙ„ Ø£Ùˆ Ø§Ù„ØªØ­Ù‚Ù‚ Ù…Ù† Ø§Ù„Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª.");
   }
 
   const existing = await listTeachers();
@@ -129,7 +129,7 @@ export async function createTeacher(input: CreateTeacherInput): Promise<TeacherL
   });
 
   if (duplicate) {
-    throw new Error("يوجد مدرس مسجل بالفعل بنفس الاسم أو الهاتف أو البريد الإلكتروني.");
+    throw new Error("ÙŠÙˆØ¬Ø¯ Ù…Ø¯Ø±Ø³ Ù…Ø³Ø¬Ù„ Ø¨Ø§Ù„ÙØ¹Ù„ Ø¨Ù†ÙØ³ Ø§Ù„Ø§Ø³Ù… Ø£Ùˆ Ø§Ù„Ù‡Ø§ØªÙ Ø£Ùˆ Ø§Ù„Ø¨Ø±ÙŠØ¯ Ø§Ù„Ø¥Ù„ÙƒØªØ±ÙˆÙ†ÙŠ.");
   }
 
   const payload: Database["public"]["Tables"]["teachers"]["Insert"] = {
@@ -144,7 +144,7 @@ export async function createTeacher(input: CreateTeacherInput): Promise<TeacherL
 
   const { data, error } = await supabase.from("teachers").insert(payload).select("*").single();
   if (error || !data) {
-    throw new Error(error?.message || "تعذر إنشاء سجل المدرس");
+    throw new Error(error?.message || "ØªØ¹Ø°Ø± Ø¥Ù†Ø´Ø§Ø¡ Ø³Ø¬Ù„ Ø§Ù„Ù…Ø¯Ø±Ø³");
   }
 
   const created = mapRow(data as Record<string, unknown>);
@@ -156,14 +156,16 @@ export async function createTeacher(input: CreateTeacherInput): Promise<TeacherL
 export async function deleteTeacher(id: string): Promise<boolean> {
   const supabase = getSupabaseClient();
   if (!supabase) {
-    throw new Error("تعذر الاتصال بقاعدة البيانات. أعد المحاولة بعد تسجيل الدخول أو التحقق من الإعدادات.");
+    throw new Error("ØªØ¹Ø°Ø± Ø§Ù„Ø§ØªØµØ§Ù„ Ø¨Ù‚Ø§Ø¹Ø¯Ø© Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª. Ø£Ø¹Ø¯ Ø§Ù„Ù…Ø­Ø§ÙˆÙ„Ø© Ø¨Ø¹Ø¯ ØªØ³Ø¬ÙŠÙ„ Ø§Ù„Ø¯Ø®ÙˆÙ„ Ø£Ùˆ Ø§Ù„ØªØ­Ù‚Ù‚ Ù…Ù† Ø§Ù„Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª.");
   }
 
   const { error } = await supabase.from("teachers").delete().eq("id", id);
   if (error) {
-    throw new Error(error.message || "تعذر حذف المدرس");
+    throw new Error(error.message || "ØªØ¹Ø°Ø± Ø­Ø°Ù Ø§Ù„Ù…Ø¯Ø±Ø³");
   }
 
   saveLocalTeachers(getLocalTeachers().filter((teacher) => teacher.id !== id));
   return true;
 }
+
+
