@@ -180,7 +180,9 @@ export async function deleteTeacher(id: string): Promise<boolean> {
     .maybeSingle();
 
   if (!before) {
-    throw new Error("\u0627\u0644\u0645\u062f\u0631\u0633 \u063a\u064a\u0631 \u0645\u0648\u062c\u0648\u062f \u0623\u0648 \u062a\u0645 \u062d\u0630\u0641\u0647 \u0645\u0633\u0628\u0642\u0627\u064b.");
+    // Teacher only in local/demo data - remove locally
+    saveLocalTeachers(getLocalTeachers().filter((t) => t.id !== id));
+    return true;
   }
 
   const { error } = await supabase.from("teachers").delete().eq("id", id);
