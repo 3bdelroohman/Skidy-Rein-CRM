@@ -74,14 +74,6 @@ function asNullableString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value : null;
 }
 
-function asNumber(value: unknown, fallback = 0): number {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : fallback;
-  }
-  return fallback;
-}
 
 function asCourse(value: unknown, fallback: CourseType = "scratch"): CourseType {
   return VALID_COURSES.includes(value as CourseType) ? (value as CourseType) : fallback;

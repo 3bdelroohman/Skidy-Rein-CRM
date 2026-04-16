@@ -335,7 +335,7 @@ function OperationsGrid({ locale, items, compact = false }: { locale: "ar" | "en
   );
 }
 
-function QuickActionGrid({ title, locale, isAr, actions, compact = false }: { title: string; locale: "ar" | "en"; isAr: boolean; actions: DashboardActionItem[]; compact?: boolean }) {
+function QuickActionGrid({ title, locale: _locale, isAr, actions, compact = false }: { title: string; locale: "ar" | "en"; isAr: boolean; actions: DashboardActionItem[]; compact?: boolean }) {
   return (
     <div className="rounded-2xl border border-border bg-card p-5">
       <DashboardSectionTitle title={title} icon={Target} />

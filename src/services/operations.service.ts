@@ -36,9 +36,6 @@ function matchesAssignee(nameAr: string, ctx: DashboardContext): boolean {
   return targets.includes(normalizeName(nameAr));
 }
 
-function getNumberLocale(locale: Locale): string {
-  return locale === "ar" ? "ar-EG" : "en-US";
-}
 
 export function getActionToneStyles(priority: ActionCenterItem["priority"]): { bg: string; color: string; border: string } {
   switch (priority) {
