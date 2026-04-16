@@ -84,7 +84,7 @@ function saveLocalActivities(activities: LeadActivityItem[]): void {
   writeStorage(ACTIVITIES_KEY, sortByDateDesc(activities, (activity) => activity.date));
 }
 
-function clearLocalActivities(): void {
+function _clearLocalActivities(): void {
   writeStorage(ACTIVITIES_KEY, []);
 }
 

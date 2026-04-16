@@ -127,7 +127,7 @@ function inferTeacher(
   }) ?? null;
 }
 
-function extractDay(source: { day_of_week?: unknown; weekday?: unknown; day?: unknown }, fallback = 0): number {
+function _extractDay(source: { day_of_week?: unknown; weekday?: unknown; day?: unknown }, fallback = 0): number {
   return asNumber(source.day_of_week ?? source.weekday ?? source.day, fallback);
 }
 

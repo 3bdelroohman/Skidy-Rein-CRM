@@ -90,8 +90,8 @@ export function GlobalSearch({ open, onClose }: GlobalSearchProps) {
 
   useEffect(() => {
     if (!open) {
-      setQuery("");
-      setScope("all");
+      requestAnimationFrame(function() { setQuery("") });
+      requestAnimationFrame(function() { setScope("all") });
     }
   }, [open]);
 

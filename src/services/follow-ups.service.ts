@@ -52,7 +52,7 @@ function mockFollowUps(): FollowUpItem[] {
 /*  Value coercion helpers                                             */
 /* ------------------------------------------------------------------ */
 
-function asString(value: unknown, fallback = ""): string {
+function _asString(value: unknown, fallback = ""): string {
   return typeof value === "string" && value.trim().length > 0 ? value : fallback;
 }
 
