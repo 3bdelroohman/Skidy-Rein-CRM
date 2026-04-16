@@ -439,6 +439,49 @@ export async function createScheduleEntry(input: CreateScheduleEntryInput): Prom
 }
 
 
+/** Delete a schedule session permanently */
+export async function deleteScheduleEntry(id: string): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  if (!supabase) throw new Error("Supabase client not available");
 
+  // Try deleting from sessions first
+  const { data: session } = await supabase
+    .from("sessions")
+    .select("id, class_id")
+    .eq("id", id)
+    .maybeSingle();
 
+  if (session) {
+    // Delete attendance for this session
+    await supabase.from("attendance").delete().eq("session_id", id);
+
+    // Delete the session
+    const { error } = await supabase.from("sessions").delete().eq("id", id);
+    if (error) throw new Error(error.message || "Failed to delete session");
+
+    // Check if class has other sessions
+    if (session.class_id) {
+      const { data: remaining } = await supabase
+        .from("sessions")
+        .select("id")
+        .eq("class_id", session.class_id)
+        .limit(1);
+
+      // If no more sessions, delete the class too
+      if (!remaining || remaining.length === 0) {
+        await supabase.from("class_enrollments").delete().eq("class_id", session.class_id);
+        await supabase.from("classes").delete().eq("id", session.class_id);
+      }
+    }
+  } else {
+    // Maybe it's a class ID directly
+    await supabase.from("sessions").delete().eq("class_id", id);
+    await supabase.from("class_enrollments").delete().eq("class_id", id);
+    const { error } = await supabase.from("classes").delete().eq("id", id);
+    if (error) throw new Error(error.message || "Failed to delete class");
+  }
+
+  saveLocalSchedule(getLocalSchedule().filter((s) => s.id !== id));
+  return true;
+}
 

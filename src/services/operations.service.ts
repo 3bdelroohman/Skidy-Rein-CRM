@@ -209,29 +209,29 @@ export async function getActionCenterData(
     ? [
         {
           label: t(locale, "طلاب بحاجة متابعة", "Students at risk"),
-          value: atRiskStudents.length.toLocaleString(numberLocale),
+          value: atRiskStudents.length.toLocaleString("en-US"),
           tone: atRiskStudents.length > 0 ? "warning" : "success",
         },
         {
           label: t(locale, "مدفوعات متأخرة", "Overdue payments"),
-          value: overduePayments.length.toLocaleString(numberLocale),
+          value: overduePayments.length.toLocaleString("en-US"),
           tone: overduePayments.length > 0 ? "danger" : "success",
         },
         {
           label: t(locale, "جلسات اليوم", "Today's sessions"),
-          value: todaySessions.length.toLocaleString(numberLocale),
+          value: todaySessions.length.toLocaleString("en-US"),
           tone: "info",
         },
         {
           label: t(locale, "حمولة الأسبوع", "Weekly load"),
-          value: scheduleOverview.sessionsCount.toLocaleString(numberLocale),
+          value: scheduleOverview.sessionsCount.toLocaleString("en-US"),
           tone: "brand",
         },
       ]
     : [
         {
           label: t(locale, "إجراءات حرجة", "Critical actions"),
-          value: critical.length.toLocaleString(numberLocale),
+          value: critical.length.toLocaleString("en-US"),
           tone: critical.length > 0 ? "danger" : "success",
         },
         {
@@ -241,12 +241,12 @@ export async function getActionCenterData(
         },
         {
           label: t(locale, "جلسات اليوم", "Today's sessions"),
-          value: todaySessions.length.toLocaleString(numberLocale),
+          value: todaySessions.length.toLocaleString("en-US"),
           tone: "info",
         },
         {
           label: t(locale, "العملاء المفتوحون بلا متابعة", "Open leads without follow-up"),
-          value: leadsWithoutFollowUp.length.toLocaleString(numberLocale),
+          value: leadsWithoutFollowUp.length.toLocaleString("en-US"),
           tone: leadsWithoutFollowUp.length > 0 ? "warning" : "success",
         },
       ];

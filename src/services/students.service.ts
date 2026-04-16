@@ -201,3 +201,37 @@ export async function createStudent(input: CreateStudentInput): Promise<StudentL
   saveLocalStudents([created, ...getLocalStudents().filter((item) => item.id !== created.id)]);
   return created;
 }
+
+
+/** Delete a student permanently */
+export async function deleteStudent(id: string): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  if (!supabase) throw new Error("Supabase client not available");
+
+  const { data: before } = await supabase
+    .from("students")
+    .select("id")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!before) throw new Error("\u0627\u0644\u0637\u0627\u0644\u0628 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F");
+
+  // Delete related enrollments
+  await supabase.from("class_enrollments").delete().eq("student_id", id);
+
+  // Delete related attendance
+  await supabase.from("attendance").delete().eq("student_id", id);
+
+  // Delete related payments
+  await supabase.from("payments").delete().eq("student_id", id);
+
+  // Delete related follow-ups
+  await supabase.from("follow_ups").delete().eq("student_id", id);
+
+  const { error } = await supabase.from("students").delete().eq("id", id);
+  if (error) throw new Error(error.message || "Failed to delete student");
+
+  saveLocalStudents(getLocalStudents().filter((s) => s.id !== id));
+  return true;
+}
+

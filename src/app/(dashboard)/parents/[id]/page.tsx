@@ -2,13 +2,16 @@
 
 import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Mail, MapPin, MessageCircle, Phone, UserCircle, UserPlus } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, ArrowRight, Mail, MapPin, MessageCircle, Phone, UserCircle, UserPlus, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { useUIStore } from "@/stores/ui-store";
 import { STUDENT_STATUS_META, getMetaLabel } from "@/config/status-meta";
 import { t, getCourseLabel, getStageLabel } from "@/lib/locale";
 import { formatCurrencyEgp } from "@/lib/formatters";
 import { extractLeadIdFromProjectionId, getParentDetails } from "@/services/relations.service";
 import { buildStudentReportSnapshot } from "@/services/student-report.service";
+import { deleteParent } from "@/services/parents.service";
 import { LoadingState, PageStateCard } from "@/components/shared/page-state";
 import type { ParentDetails } from "@/types/crm";
 
@@ -18,6 +21,8 @@ export default function ParentDetailsPage({ params }: { params: Promise<{ id: st
   const isAr = locale === "ar";
   const [parent, setParent] = useState<ParentDetails | null>(null);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     let mounted = true;
@@ -31,6 +36,41 @@ export default function ParentDetailsPage({ params }: { params: Promise<{ id: st
       mounted = false;
     };
   }, [id]);
+
+  const childrenSnapshots = useMemo(() => {
+    if (!parent || !parent.childrenRecords) return [];
+    return parent.childrenRecords.map((student) => {
+      const sourceLeadId = extractLeadIdFromProjectionId(student.id);
+      const snapshot = buildStudentReportSnapshot(student);
+      const scheduleHref = `/schedule/new?className=${encodeURIComponent(student.className ?? "")}${student.currentCourse ? `&course=${student.currentCourse}` : ""}`;
+      const createActualHref = `/students/new?parentName=${encodeURIComponent(parent.fullName)}&parentPhone=${encodeURIComponent(parent.phone)}&childName=${encodeURIComponent(student.fullName)}${student.age > 0 ? `&childAge=${student.age}` : ""}${student.currentCourse ? `&currentCourse=${student.currentCourse}` : ""}${student.className ? `&className=${encodeURIComponent(student.className)}` : ""}`;
+
+      return { student, sourceLeadId, snapshot, scheduleHref, createActualHref };
+    });
+  }, [parent]);
+
+  const projectedCount = childrenSnapshots.filter((item) => item.sourceLeadId).length;
+  const actualCount = childrenSnapshots.length - projectedCount;
+  const reportReadyCount = childrenSnapshots.filter((item) => item.snapshot.ready).length;
+  const needsAttentionCount = childrenSnapshots.length - reportReadyCount;
+
+  const handleDeleteParent = async () => {
+    if (!parent) return;
+    const confirmed = window.confirm(locale === "ar" ? "هل تريد حذف ولي الأمر نهائيًا؟" : "Delete this parent permanently?");
+    if (!confirmed) return;
+    setDeleting(true);
+    try {
+      await deleteParent(parent.id);
+      toast.success(locale === "ar" ? "تم حذف ولي الأمر" : "Parent deleted");
+      router.push("/parents");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : (locale === "ar" ? "تعذر حذف ولي الأمر" : "Could not delete parent"));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+
 
   if (loading) {
     return (
@@ -58,22 +98,6 @@ export default function ParentDetailsPage({ params }: { params: Promise<{ id: st
     );
   }
 
-  const childrenSnapshots = useMemo(() => {
-    return parent.childrenRecords.map((student) => {
-      const sourceLeadId = extractLeadIdFromProjectionId(student.id);
-      const snapshot = buildStudentReportSnapshot(student);
-      const scheduleHref = `/schedule/new?className=${encodeURIComponent(student.className ?? "")}${student.currentCourse ? `&course=${student.currentCourse}` : ""}`;
-      const createActualHref = `/students/new?parentName=${encodeURIComponent(parent.fullName)}&parentPhone=${encodeURIComponent(parent.phone)}&childName=${encodeURIComponent(student.fullName)}${student.age > 0 ? `&childAge=${student.age}` : ""}${student.currentCourse ? `&currentCourse=${student.currentCourse}` : ""}${student.className ? `&className=${encodeURIComponent(student.className)}` : ""}`;
-
-      return { student, sourceLeadId, snapshot, scheduleHref, createActualHref };
-    });
-  }, [parent]);
-
-  const projectedCount = childrenSnapshots.filter((item) => item.sourceLeadId).length;
-  const actualCount = childrenSnapshots.length - projectedCount;
-  const reportReadyCount = childrenSnapshots.filter((item) => item.snapshot.ready).length;
-  const needsAttentionCount = childrenSnapshots.length - reportReadyCount;
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
@@ -85,6 +109,10 @@ export default function ParentDetailsPage({ params }: { params: Promise<{ id: st
             <h1 className="text-2xl font-bold text-foreground">{parent.fullName}</h1>
             <p className="text-sm text-muted-foreground">{parent.phone}</p>
           </div>
+        <button onClick={handleDeleteParent} disabled={deleting} className="inline-flex items-center gap-2 rounded-2xl bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-50">
+          <Trash2 size={16} />
+          {deleting ? (locale === "ar" ? "جارِ الحذف..." : "Deleting...") : (locale === "ar" ? "حذف" : "Delete")}
+        </button>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">

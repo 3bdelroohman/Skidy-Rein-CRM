@@ -32,8 +32,8 @@ export default function TeachersFinancePage() {
       const teachers = await listTeachers();
       const details = (await Promise.all(teachers.map((teacher) => getTeacherDetails(teacher.id)))).filter(Boolean) as TeacherDetails[];
       if (!mounted) return;
-      const next = details.map((teacher) => {
-        const config = getTeacherFinanceConfig(teacher.id);
+      const next = await Promise.all(details.map(async (teacher) => {
+        const config = await getTeacherFinanceConfig(teacher.id);
         const summary = computeTeacherFinanceSummary(teacher.linkedSessions, config);
         return {
           teacher,
@@ -42,7 +42,7 @@ export default function TeachersFinancePage() {
           averagePerSession: summary.averagePerSession,
           linkedSessions: summary.linkedSessions,
         };
-      });
+      }));
       setItems(next.sort((a, b) => b.monthlyEstimated - a.monthlyEstimated || a.teacher.fullName.localeCompare(b.teacher.fullName, "ar")));
       setLoading(false);
     })();

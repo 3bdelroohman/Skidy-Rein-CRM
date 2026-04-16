@@ -185,10 +185,10 @@ function mapPaymentRow(
   return {
     id: asString(record.id, crypto.randomUUID()),
     studentId,
-    studentName: student?.fullName ?? asString(record.student_name ?? record.studentName, "Ø·Ø§Ù„Ø¨ ØºÙŠØ± Ù…Ø­Ø¯Ø¯"),
+    studentName: student?.fullName ?? asString(record.studentName, "Ø·Ø§Ù„Ø¨ ØºÙŠØ± Ù…Ø­Ø¯Ø¯"),
     parentId: student?.parentId ?? parent?.id ?? asNullableString(record.parent_id ?? record.parentId),
     parentName:
-      parent?.fullName ?? student?.parentName ?? asString(record.parent_name ?? record.parentName, "ÙˆÙ„ÙŠ Ø£Ù…Ø± ØºÙŠØ± Ù…Ø­Ø¯Ø¯"),
+      parent?.fullName ?? student?.parentName ?? asString(record.parentName, "ÙˆÙ„ÙŠ Ø£Ù…Ø± ØºÙŠØ± Ù…Ø­Ø¯Ø¯"),
     amount: asNumber(record.amount),
     status: asStatus(record.status),
     method: asMethod(record.method),

@@ -44,7 +44,7 @@ export default function TeacherDetailsPage({ params }: { params: Promise<{ id: s
     setAlternatives(teachers.filter((item) => item.id !== id));
     if (data) {
       const evaluation = getTeacherEvaluation(id);
-      const finance = getTeacherFinanceConfig(id);
+      const finance = await getTeacherFinanceConfig(id);
       setRating(evaluation?.rating ? String(evaluation.rating) : "3");
       setNotes(evaluation?.notes ?? "");
       setSessionRate60(String(finance.sessionRate60));
@@ -118,7 +118,7 @@ export default function TeacherDetailsPage({ params }: { params: Promise<{ id: s
     if (!teacher) return;
     setBusy("finance");
     try {
-      saveTeacherFinanceConfig({
+      await saveTeacherFinanceConfig({
         teacherId: teacher.id,
         sessionRate60: Number(sessionRate60) || 120,
         sessionRate90: Number(sessionRate90) || 180,

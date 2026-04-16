@@ -169,3 +169,37 @@ export async function createParent(input: CreateParentInput): Promise<ParentList
   return created;
 }
 
+
+/** Delete a parent permanently */
+export async function deleteParent(id: string): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  if (!supabase) throw new Error("Supabase client not available");
+
+  const { data: before } = await supabase
+    .from("parents")
+    .select("id")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!before) throw new Error("Parent not found");
+
+  // Check for linked students
+  const { data: students } = await supabase
+    .from("students")
+    .select("id")
+    .eq("parent_id", id)
+    .limit(1);
+
+  if (students && students.length > 0) {
+    throw new Error("لا يمكن حذف ولي الأمر لأن لديه طلاب مرتبطين");
+  }
+
+  const { error } = await supabase.from("parents").delete().eq("id", id);
+  if (error) throw new Error(error.message || "Failed to delete parent");
+
+  const local = readStorage<{id:string}[]>(PARENTS_KEY, []);
+  writeStorage(PARENTS_KEY, local.filter((p) => p.id !== id));
+
+  return true;
+}
+

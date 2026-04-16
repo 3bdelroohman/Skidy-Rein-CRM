@@ -10,6 +10,7 @@ import type {
 } from "@/types/crm";
 import { MOCK_LEADS, MOCK_LEAD_ACTIVITIES, MOCK_TEAM } from "@/lib/mock-data";
 import { isBrowser, readStorage, sortByDateDesc, writeStorage } from "@/services/storage";
+import { ensureLeadEnrollment } from "./enrollment.service";
 
 const LEADS_KEY = "skidy.crm.leads";
 const ACTIVITIES_KEY = "skidy.crm.lead-activities";
@@ -343,6 +344,29 @@ export async function createLead(input: CreateLeadInput): Promise<LeadListItem> 
       notes: draftLead.notes,
     };
 
+
+    // --- Duplicate check ---
+    const _normPhone = (insertPayload.parent_phone ?? "").replace(/\D/g, "").replace(/^20/, "");
+    if (_normPhone.length >= 10 && insertPayload.child_name) {
+      const { data: _existing } = await supabase
+        .from("leads")
+        .select("id, parent_phone, child_name, stage")
+        .ilike("child_name", insertPayload.child_name)
+        .limit(100);
+
+      const _dup = (_existing ?? []).find((r) => {
+        const rp = (r.parent_phone ?? "").replace(/\D/g, "").replace(/^20/, "");
+        return rp === _normPhone;
+      });
+
+      if (_dup) {
+        throw new Error(
+          "\u064a\u0648\u062c\u062f \u0639\u0645\u064a\u0644 \u0645\u062d\u062a\u0645\u0644 \u0628\u0646\u0641\u0633 \u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062a\u0641 \u0648\u0627\u0633\u0645 \u0627\u0644\u0637\u0641\u0644 (ID: " + _dup.id.slice(0, 8) + ")"
+        );
+      }
+    }
+    // --- End duplicate check ---
+
     const { data, error } = await supabase
       .from("leads")
       .insert(insertPayload)
@@ -523,6 +547,18 @@ export async function updateLeadStage(
       to_stage: stage,
       metadata: { type: "stage", actor_name: actorName },
     });
+
+    // --- Auto-enrollment on won ---
+    if (stage === "won") {
+      try {
+        await ensureLeadEnrollment(leadId);
+        console.log("[leads] auto-enrolled lead", leadId);
+      } catch (enrollErr) {
+        console.warn("[leads] auto-enrollment failed", leadId, enrollErr);
+      }
+    }
+    // --- End auto-enrollment ---
+
   } catch (error) {
     console.error("[leads] stage update failed", error);
     if (shouldUseDemoFallback()) return updated;
@@ -531,3 +567,31 @@ export async function updateLeadStage(
 
   return updated;
 }
+
+
+/** Delete a lead permanently */
+export async function deleteLead(id: string): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  if (!supabase) throw new Error("Supabase client not available");
+
+  const { data: before } = await supabase
+    .from("leads")
+    .select("id")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!before) throw new Error("Lead not found");
+
+  // Delete related activities first
+  await supabase.from("lead_activities").delete().eq("lead_id", id);
+
+  const { error } = await supabase.from("leads").delete().eq("id", id);
+  if (error) throw new Error(error.message || "Failed to delete lead");
+
+  // Clean local storage
+  const local = readStorage<{id:string}[]>(LEADS_KEY, []);
+  writeStorage(LEADS_KEY, local.filter((l) => l.id !== id));
+
+  return true;
+}
+

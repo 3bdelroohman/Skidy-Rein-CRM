@@ -131,19 +131,19 @@ export async function getDashboardOverview(
     ? [
         {
           title: t(locale, "جلسات هذا الأسبوع", "Sessions this week"),
-          value: scheduleOverview.sessionsCount.toLocaleString(numberLocale),
+          value: scheduleOverview.sessionsCount.toLocaleString("en-US"),
           subtitle: t(locale, `${scheduleOverview.uniqueTeachers} مدرسين • ${scheduleOverview.totalStudents} مقعد`, `${scheduleOverview.uniqueTeachers} teachers • ${scheduleOverview.totalStudents} seats`),
           tone: "info",
         },
         {
           title: t(locale, "طلاب بحاجة متابعة", "Students at risk"),
-          value: atRiskStudents.toLocaleString(numberLocale),
+          value: atRiskStudents.toLocaleString("en-US"),
           subtitle: t(locale, "ملفات تحتاج تدخلًا تشغيليًا الآن", "Student files that need operational intervention"),
           tone: atRiskStudents > 0 ? "warning" : "success",
         },
         {
           title: t(locale, "الطلاب التجريبيون", "Trial students"),
-          value: trialStudents.toLocaleString(numberLocale),
+          value: trialStudents.toLocaleString("en-US"),
           subtitle: t(locale, "راجع الحضور والتحويل إلى اشتراك", "Review attendance and conversion to enrollment"),
           tone: trialStudents > 0 ? "brand" : "info",
         },
@@ -163,20 +163,20 @@ export async function getDashboardOverview(
         },
         {
           title: t(locale, "جلسات هذا الأسبوع", "Sessions this week"),
-          value: scheduleOverview.sessionsCount.toLocaleString(numberLocale),
+          value: scheduleOverview.sessionsCount.toLocaleString("en-US"),
           subtitle: t(locale, `${scheduleOverview.uniqueTeachers} مدرسين • ${scheduleOverview.totalStudents} مقعد`, `${scheduleOverview.uniqueTeachers} teachers • ${scheduleOverview.totalStudents} seats`),
           tone: "info",
         },
         {
           title: t(locale, "عملاء بلا متابعة قادمة", "Leads without next follow-up"),
-          value: leadsMissingFollowUp.toLocaleString(numberLocale),
+          value: leadsMissingFollowUp.toLocaleString("en-US"),
           subtitle: t(locale, "احتكاك تشغيلي يجب تنظيفه", "Operational friction that needs cleanup"),
           tone: leadsMissingFollowUp > 0 ? "warning" : "success",
         },
         {
           title: t(locale, "الحصص التجريبية المحجوزة", "Booked trial sessions"),
-          value: bookedTrials.toLocaleString(numberLocale),
-          subtitle: t(locale, `${attendedTrials.toLocaleString(numberLocale)} حضروا بالفعل`, `${attendedTrials.toLocaleString(numberLocale)} already attended`),
+          value: bookedTrials.toLocaleString("en-US"),
+          subtitle: t(locale, `${attendedTrials.toLocaleString("en-US")} حضروا بالفعل`, `${attendedTrials.toLocaleString("en-US")} already attended`),
           tone: bookedTrials > attendedTrials ? "brand" : "success",
         },
       ];
@@ -271,13 +271,13 @@ export async function getDashboardOverview(
       ? [
           {
             label: t(locale, "طلاب نشطون", "Active students"),
-            value: activeStudents.toLocaleString(numberLocale),
+            value: activeStudents.toLocaleString("en-US"),
             change: trialStudents > 0 ? `+${trialStudents}` : "0",
             bg: "#4F46E5",
           },
           {
             label: t(locale, "جلسات الأسبوع", "Weekly sessions"),
-            value: scheduleOverview.sessionsCount.toLocaleString(numberLocale),
+            value: scheduleOverview.sessionsCount.toLocaleString("en-US"),
             change: scheduleOverview.uniqueTeachers > 0 ? `+${scheduleOverview.uniqueTeachers}` : "0",
             bg: "#8B5CF6",
           },
@@ -289,7 +289,7 @@ export async function getDashboardOverview(
           },
           {
             label: t(locale, "طلاب بحاجة متابعة", "Students at risk"),
-            value: atRiskStudents.toLocaleString(numberLocale),
+            value: atRiskStudents.toLocaleString("en-US"),
             change: atRiskStudents > 0 ? t(locale, "+مهم", "+Important") : "0",
             bg: "#0D9488",
           },
@@ -297,13 +297,13 @@ export async function getDashboardOverview(
       : [
           {
             label: t(locale, "طلاب نشطون", "Active students"),
-            value: activeStudents.toLocaleString(numberLocale),
+            value: activeStudents.toLocaleString("en-US"),
             change: recentLeads > 0 ? `+${recentLeads}` : "0",
             bg: "#4F46E5",
           },
           {
             label: t(locale, "عملاء جدد", "New leads"),
-            value: recentLeads.toLocaleString(numberLocale),
+            value: recentLeads.toLocaleString("en-US"),
             change: recentLeads > 0 ? t(locale, "+نشط", "+Active") : "0",
             bg: "#8B5CF6",
           },
@@ -322,16 +322,16 @@ export async function getDashboardOverview(
         ],
     secondaryStats: isOps
       ? [
-          { label: t(locale, "جلسات اليوم", "Today's sessions"), value: sessions.length.toLocaleString(numberLocale), icon: "calendar", bg: "#EFF6FF", color: "#2563EB" },
-          { label: t(locale, "طلاب بحاجة متابعة", "Students at risk"), value: atRiskStudents.toLocaleString(numberLocale), icon: "warning", bg: "#FEF2F2", color: "#DC2626" },
-          { label: t(locale, "طلاب تجريبيون", "Trial students"), value: trialStudents.toLocaleString(numberLocale), icon: "clock", bg: "#FFFBEB", color: "#D97706" },
-          { label: t(locale, "مدفوعات معلقة", "Pending payments"), value: pendingPaymentsCount.toLocaleString(numberLocale), icon: "wallet", bg: "#F5F3FF", color: "#7C3AED" },
+          { label: t(locale, "جلسات اليوم", "Today's sessions"), value: sessions.length.toLocaleString("en-US"), icon: "calendar", bg: "#EFF6FF", color: "#2563EB" },
+          { label: t(locale, "طلاب بحاجة متابعة", "Students at risk"), value: atRiskStudents.toLocaleString("en-US"), icon: "warning", bg: "#FEF2F2", color: "#DC2626" },
+          { label: t(locale, "طلاب تجريبيون", "Trial students"), value: trialStudents.toLocaleString("en-US"), icon: "clock", bg: "#FFFBEB", color: "#D97706" },
+          { label: t(locale, "مدفوعات معلقة", "Pending payments"), value: pendingPaymentsCount.toLocaleString("en-US"), icon: "wallet", bg: "#F5F3FF", color: "#7C3AED" },
         ]
       : [
-          { label: t(locale, "سيشن تجريبية", "Trial sessions"), value: bookedTrials.toLocaleString(numberLocale), icon: "calendar", bg: "#EFF6FF", color: "#2563EB" },
-          { label: t(locale, "طلاب بحاجة متابعة", "Students at risk"), value: atRiskStudents.toLocaleString(numberLocale), icon: "warning", bg: "#FEF2F2", color: "#DC2626" },
-          { label: t(locale, "متابعات متأخرة", "Overdue follow-ups"), value: overdueFollowUps.toLocaleString(numberLocale), icon: "clock", bg: "#FFFBEB", color: "#D97706" },
-          { label: t(locale, "مدفوعات معلقة", "Pending payments"), value: pendingPaymentsCount.toLocaleString(numberLocale), icon: "wallet", bg: "#F5F3FF", color: "#7C3AED" },
+          { label: t(locale, "سيشن تجريبية", "Trial sessions"), value: bookedTrials.toLocaleString("en-US"), icon: "calendar", bg: "#EFF6FF", color: "#2563EB" },
+          { label: t(locale, "طلاب بحاجة متابعة", "Students at risk"), value: atRiskStudents.toLocaleString("en-US"), icon: "warning", bg: "#FEF2F2", color: "#DC2626" },
+          { label: t(locale, "متابعات متأخرة", "Overdue follow-ups"), value: overdueFollowUps.toLocaleString("en-US"), icon: "clock", bg: "#FFFBEB", color: "#D97706" },
+          { label: t(locale, "مدفوعات معلقة", "Pending payments"), value: pendingPaymentsCount.toLocaleString("en-US"), icon: "wallet", bg: "#F5F3FF", color: "#7C3AED" },
         ],
     alerts,
     funnel: isOps

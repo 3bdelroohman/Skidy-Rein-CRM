@@ -2,12 +2,15 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, CalendarDays, CalendarPlus, FileText, GraduationCap, MessageCircle, Phone, ReceiptText, UserCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, ArrowRight, CalendarDays, CalendarPlus, FileText, GraduationCap, MessageCircle, Phone, ReceiptText, UserCircle, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { useUIStore } from "@/stores/ui-store";
 import { STUDENT_STATUS_META, getMetaLabel } from "@/config/status-meta";
 import { getCourseLabel, t } from "@/lib/locale";
 import { formatCurrencyEgp, formatDate } from "@/lib/formatters";
 import { extractLeadIdFromProjectionId, getStudentDetails } from "@/services/relations.service";
+import { deleteStudent } from "@/services/students.service";
 import { LoadingState, PageStateCard } from "@/components/shared/page-state";
 import type { StudentDetails } from "@/types/crm";
 
@@ -17,6 +20,8 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
   const isAr = locale === "ar";
   const [student, setStudent] = useState<StudentDetails | null>(null);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     let mounted = true;
@@ -30,6 +35,24 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
       mounted = false;
     };
   }, [id]);
+
+  const handleDeleteStudent = async () => {
+    if (!student) return;
+    const confirmed = window.confirm(locale === "ar" ? "هل تريد حذف هذا الطالب نهائيًا؟" : "Delete this student permanently?");
+    if (!confirmed) return;
+    setDeleting(true);
+    try {
+      await deleteStudent(student.id);
+      toast.success(locale === "ar" ? "تم حذف الطالب" : "Student deleted");
+      router.push("/students");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : (locale === "ar" ? "تعذر حذف الطالب" : "Could not delete student"));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+
 
   if (loading) {
     return (
@@ -75,6 +98,10 @@ export default function StudentDetailsPage({ params }: { params: Promise<{ id: s
             <h1 className="text-2xl font-bold text-foreground">{student.fullName}</h1>
             <p className="text-sm text-muted-foreground">{student.parentName} — {student.parentPhone}</p>
           </div>
+        <button onClick={handleDeleteStudent} disabled={deleting} className="inline-flex items-center gap-2 rounded-2xl bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-50">
+          <Trash2 size={16} />
+          {deleting ? (locale === "ar" ? "جارِ الحذف..." : "Deleting...") : (locale === "ar" ? "حذف" : "Delete")}
+        </button>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">

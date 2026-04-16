@@ -199,7 +199,7 @@ export default function ReportsPage() {
                         <td className="px-4 py-3 text-foreground">{item.leads}</td>
                         <td className="px-4 py-3 font-bold text-success-600">{item.won}</td>
                         <td className="px-4 py-3 text-foreground">{item.rate}</td>
-                        <td className="px-4 py-3 font-bold text-foreground">{locale === "ar" ? item.revenue.toLocaleString("ar-EG") : item.revenue.toLocaleString("en-US")} {t(locale, "ج.م", "EGP")}</td>
+                        <td className="px-4 py-3 font-bold text-foreground">{locale === "ar" ? item.revenue.toLocaleString("en-US") : item.revenue.toLocaleString("en-US")} {t(locale, "ج.م", "EGP")}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -257,5 +257,5 @@ function EmptyBlock({ label }: { label: string }) {
 }
 
 function formatMoney(value: number, locale: "ar" | "en") {
-  return `${locale === "ar" ? value.toLocaleString("ar-EG") : value.toLocaleString("en-US")} ${t(locale, "ج.م", "EGP")}`;
+  return `${locale === "ar" ? value.toLocaleString("en-US") : value.toLocaleString("en-US")} ${t(locale, "ج.م", "EGP")}`;
 }

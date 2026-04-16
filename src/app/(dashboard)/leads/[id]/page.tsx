@@ -11,7 +11,7 @@ import {
   CheckCircle2,
   Clock,
   CreditCard,
-  Edit,
+  Edit, Trash2,
   GraduationCap,
   MessageSquare,
   RotateCcw,
@@ -27,7 +27,7 @@ import { getStageLabel, t } from "@/lib/locale";
 import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/providers/user-provider";
 import { useUIStore } from "@/stores/ui-store";
-import { getLeadById, listLeadActivities, updateLeadStage } from "@/services/leads.service";
+import { getLeadById, listLeadActivities, updateLeadStage, deleteLead } from "@/services/leads.service";
 import {
   createFollowUp,
   listFollowUpsByLead,
@@ -52,6 +52,7 @@ export default function LeadDetailsPage({ params }: { params: Promise<{ id: stri
   const [followUps, setFollowUps] = useState<FollowUpItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [changingStage, setChangingStage] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [savingFollowUp, setSavingFollowUp] = useState(false);
   const [togglingFollowUp, setTogglingFollowUp] = useState<string | null>(null);
   const [followUpForm, setFollowUpForm] = useState<{ title: string; scheduledAt: string; priority: CreateFollowUpInput["priority"]; channel: CreateFollowUpInput["channel"]; }>({
@@ -133,6 +134,23 @@ export default function LeadDetailsPage({ params }: { params: Promise<{ id: stri
     }
     setChangingStage(null);
   };
+
+  const handleDeleteLead = async () => {
+    if (!lead) return;
+    const confirmed = window.confirm(locale === "ar" ? "هل تريد حذف هذا العميل نهائيًا؟" : "Delete this lead permanently?");
+    if (!confirmed) return;
+    setDeleting(true);
+    try {
+      await deleteLead(lead.id);
+      toast.success(locale === "ar" ? "تم حذف العميل" : "Lead deleted");
+      router.push("/leads");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : (locale === "ar" ? "تعذر حذف العميل" : "Could not delete lead"));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
 
 
   const handleCreateFollowUp = async () => {
@@ -219,6 +237,11 @@ export default function LeadDetailsPage({ params }: { params: Promise<{ id: stri
         <div className="flex flex-wrap items-center gap-2">
           <StageBadge stage={lead.stage} />
           <TemperatureBadge temperature={lead.temperature} />
+          
+          <button onClick={handleDeleteLead} disabled={deleting} className="inline-flex items-center gap-2 rounded-2xl bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-50">
+            <Trash2 size={16} />
+            {deleting ? (locale === "ar" ? "جارِ الحذف..." : "Deleting...") : (locale === "ar" ? "حذف" : "Delete")}
+          </button>
           <Link href={`/leads/${id}/edit`} className="inline-flex items-center gap-2 rounded-2xl bg-brand-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600">
             <Edit size={16} />
             {t(locale, "تعديل البيانات", "Edit details")}

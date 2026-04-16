@@ -109,13 +109,13 @@ export async function getReportsData(locale: Locale = "ar"): Promise<ReportsData
   const operationalSummary: ReportsSummaryItem[] = [
     {
       title: t(locale, "متابعات متأخرة", "Overdue follow-ups"),
-      value: overdueFollowUps.toLocaleString(locale === "ar" ? "ar-EG" : "en-US"),
+      value: overdueFollowUps.toLocaleString("en-US"),
       subtitle: t(locale, "كل تأخير هنا يعني فرصة أبطأ أو مهدورة", "Every delay here means a slower or missed opportunity"),
       tone: overdueFollowUps > 0 ? "danger" : "success",
     },
     {
       title: t(locale, "طلاب بحاجة متابعة", "Students at risk"),
-      value: atRiskStudents.toLocaleString(locale === "ar" ? "ar-EG" : "en-US"),
+      value: atRiskStudents.toLocaleString("en-US"),
       subtitle: t(locale, "راقب التوقف والغياب قبل الانسحاب", "Watch pauses and absence before they churn"),
       tone: atRiskStudents > 0 ? "warning" : "success",
     },
@@ -127,7 +127,7 @@ export async function getReportsData(locale: Locale = "ar"): Promise<ReportsData
     },
     {
       title: t(locale, "حمولة الجدول", "Schedule load"),
-      value: scheduleOverview.sessionsCount.toLocaleString(locale === "ar" ? "ar-EG" : "en-US"),
+      value: scheduleOverview.sessionsCount.toLocaleString("en-US"),
       subtitle: t(locale, `${scheduleOverview.uniqueTeachers} مدرسين فعّالين`, `${scheduleOverview.uniqueTeachers} active teachers`),
       tone: "info",
     },
@@ -186,7 +186,7 @@ export async function getReportsData(locale: Locale = "ar"): Promise<ReportsData
       },
       {
         label: t(locale, "طلاب جدد", "New students"),
-        value: recentStudents.toLocaleString(locale === "ar" ? "ar-EG" : "en-US"),
+        value: recentStudents.toLocaleString("en-US"),
         change: recentStudents > 0 ? `+${recentStudents}` : "0",
         up: recentStudents > 0,
         icon: "users",

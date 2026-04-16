@@ -10,23 +10,31 @@ import { useUIStore } from "@/stores/ui-store";
 import { getBillingCycleText, getPaymentDetails, getPaymentDisplayState, getPaymentEffectiveDueDate } from "@/services/payments.service";
 import type { PaymentDetails } from "@/types/crm";
 
+/** Convert Eastern-Arabic digits to Western 0-9 */
+function _w(s: string): string {
+  return s
+    .replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[\u06F0-\u06F9]/g, (d) => String(d.charCodeAt(0) - 0x06F0));
+}
+
+
 function formatCurrency(value: number, locale: "ar" | "en"): string {
-  return new Intl.NumberFormat(locale === "ar" ? "ar-EG" : "en-US", {
+  return _w(new Intl.NumberFormat(locale === "ar" ? "ar-EG" : "en-US", {
     style: "currency",
     currency: "EGP",
     maximumFractionDigits: 0,
-  }).format(value);
+  }).format(value));
 }
 
 function formatDateLabel(value: string | null | undefined, locale: "ar" | "en"): string {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value.slice(0, 10);
-  return new Intl.DateTimeFormat(locale === "ar" ? "ar-EG" : "en-US", {
+  return _w(new Intl.DateTimeFormat(locale === "ar" ? "ar-EG" : "en-US", {
     year: "numeric",
     month: "short",
     day: "numeric",
-  }).format(date);
+  }).format(date));
 }
 
 function normalizePhone(value: string | null | undefined): string {

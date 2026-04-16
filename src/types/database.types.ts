@@ -406,9 +406,97 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["app_settings"]["Row"]>;
         Relationships: [];
       };
+      // === NEW TABLES ===
+      teacher_finance_config: {
+        Row: {
+          id: string
+          teacher_id: string
+          session_rate_60: number
+          session_rate_90: number
+          session_rate_120: number
+          adj_scratch: number
+          adj_python: number
+          adj_web: number
+          adj_ai: number
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          teacher_id: string
+          session_rate_60?: number
+          session_rate_90?: number
+          session_rate_120?: number
+          adj_scratch?: number
+          adj_python?: number
+          adj_web?: number
+          adj_ai?: number
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          teacher_id?: string
+          session_rate_60?: number
+          session_rate_90?: number
+          session_rate_120?: number
+          adj_scratch?: number
+          adj_python?: number
+          adj_web?: number
+          adj_ai?: number
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "teacher_finance_config_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: true
+            referencedRelation: "teachers"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      audit_log: {
+        Row: {
+          id: string
+          table_name: string
+          record_id: string | null
+          action: string
+          old_data: Record<string, unknown> | null
+          new_data: Record<string, unknown> | null
+          performed_by: string | null
+          performed_at: string
+        }
+        Insert: {
+          id?: string
+          table_name: string
+          record_id?: string | null
+          action: string
+          old_data?: Record<string, unknown> | null
+          new_data?: Record<string, unknown> | null
+          performed_by?: string | null
+          performed_at?: string
+        }
+        Update: {
+          id?: string
+          table_name?: string
+          record_id?: string | null
+          action?: string
+          old_data?: Record<string, unknown> | null
+          new_data?: Record<string, unknown> | null
+          performed_by?: string | null
+          performed_at?: string
+        }
+        Relationships: []
+      }
     };
 
-    Views: Record<string, never>;
+    
+Views: Record<string, never>;
 
     Functions: {
       get_my_role: {

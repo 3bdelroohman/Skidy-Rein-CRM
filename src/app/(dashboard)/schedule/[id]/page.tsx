@@ -3,11 +3,12 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, CalendarDays, Clock, GraduationCap, UserCircle, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarDays, Clock, GraduationCap, UserCircle, Users, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { formatCourseLabel } from "@/lib/formatters";
 import { getDayLabel, t } from "@/lib/locale";
 import { cn } from "@/lib/utils";
-import { getScheduleSessionDetails } from "@/services/schedule.service";
+import { getScheduleSessionDetails, deleteScheduleEntry } from "@/services/schedule.service";
 import { useUIStore } from "@/stores/ui-store";
 import type { ScheduleSessionDetails } from "@/types/crm";
 import { LoadingState, PageStateCard } from "@/components/shared/page-state";
@@ -19,6 +20,7 @@ export default function ScheduleSessionDetailsPage({ params }: { params: Promise
   const isAr = locale === "ar";
   const [session, setSession] = useState<ScheduleSessionDetails | null>(null);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -35,6 +37,24 @@ export default function ScheduleSessionDetailsPage({ params }: { params: Promise
       isMounted = false;
     };
   }, [id]);
+
+  const handleDeleteSession = async () => {
+    if (!session) return;
+    const confirmed = window.confirm(locale === "ar" ? "هل تريد حذف هذه الحصة نهائيًا؟" : "Delete this session permanently?");
+    if (!confirmed) return;
+    setDeleting(true);
+    try {
+      await deleteScheduleEntry(session.id);
+      toast.success(locale === "ar" ? "تم حذف الحصة" : "Session deleted");
+      router.push("/schedule");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : (locale === "ar" ? "تعذر حذف الحصة" : "Could not delete session"));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+
 
   if (loading) {
     return (
@@ -77,6 +97,10 @@ export default function ScheduleSessionDetailsPage({ params }: { params: Promise
         <span className="rounded-full bg-brand-50 px-3 py-1 text-sm font-semibold text-brand-700 dark:bg-brand-950 dark:text-brand-300">
           {formatCourseLabel(session.course, locale)}
         </span>
+        <button onClick={handleDeleteSession} disabled={deleting} className="inline-flex items-center gap-2 rounded-2xl bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-50">
+          <Trash2 size={16} />
+          {deleting ? (locale === "ar" ? "جارِ الحذف..." : "Deleting...") : (locale === "ar" ? "حذف" : "Delete")}
+        </button>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[0.95fr_1.05fr]">
