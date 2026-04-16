@@ -62,6 +62,7 @@ export default function TeacherDetailsPage({ params }: { params: Promise<{ id: s
     setLoading(false);
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     let mounted = true;
     (async () => {

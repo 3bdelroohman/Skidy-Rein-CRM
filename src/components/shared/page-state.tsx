@@ -99,7 +99,7 @@ export function LoadingState({ titleAr, titleEn, descriptionAr, descriptionEn }:
 }
 
 export function EmptySearchState() {
-  const locale = useUIStore((state) => state.locale);
+  // const locale = useUIStore((state) => state.locale);
 
   return (
     <PageStateCard

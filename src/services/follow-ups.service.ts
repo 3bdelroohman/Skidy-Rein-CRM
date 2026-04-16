@@ -52,9 +52,6 @@ function mockFollowUps(): FollowUpItem[] {
 /*  Value coercion helpers                                             */
 /* ------------------------------------------------------------------ */
 
-function _asString(value: unknown, fallback = ""): string {
-  return typeof value === "string" && value.trim().length > 0 ? value : fallback;
-}
 
 function asType(value: unknown): FollowUpType {
   return VALID_TYPES.includes(value as FollowUpType) ? (value as FollowUpType) : "first_contact";

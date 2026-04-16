@@ -35,9 +35,6 @@ function asNullableString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
-function _normalizePhone(value: string | null | undefined): string {
-  return (value ?? "").replace(/\D/g, "").replace(/^20/, "");
-}
 
 function normalizeName(value: string | null | undefined): string {
   return (value ?? "")

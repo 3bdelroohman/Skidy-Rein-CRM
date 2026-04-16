@@ -26,7 +26,7 @@ import { useCurrentUser } from "@/providers/user-provider";
 import { getDashboardOperationToneStyles, getDashboardOverview } from "@/services/dashboard.service";
 import { getOwnerSnapshot, type OwnerSnapshotItem } from "@/services/owner-summary.service";
 import { useUIStore } from "@/stores/ui-store";
-import { getConversionTerm, t } from "@/lib/locale";
+import { t } from "@/lib/locale";
 import type { DashboardActionItem, DashboardOverview, DashboardOperationItem } from "@/types/crm";
 
 function isManagement(role: string): boolean {

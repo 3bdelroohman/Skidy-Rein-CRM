@@ -3,7 +3,7 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, CalendarDays, CalendarPlus, FileText, GraduationCap, MessageCircle, Phone, ReceiptText, UserCircle, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarDays, CalendarPlus, FileText, GraduationCap, MessageCircle, ReceiptText, UserCircle, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useUIStore } from "@/stores/ui-store";
 import { STUDENT_STATUS_META, getMetaLabel } from "@/config/status-meta";

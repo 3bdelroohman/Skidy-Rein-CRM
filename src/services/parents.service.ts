@@ -24,14 +24,6 @@ function asNullableString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
-function _asNumber(value: unknown, fallback = 0): number {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : fallback;
-  }
-  return fallback;
-}
 
 function normalizePhone(value: string | null | undefined): string {
   return (value ?? "").replace(/\D/g, "").replace(/^20/, "");

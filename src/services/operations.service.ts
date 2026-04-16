@@ -69,7 +69,6 @@ export async function getActionCenterData(
 
   const todayIso = new Date().toISOString().slice(0, 10);
   const todayDay = new Date().getDay();
-  const _numberLocale = getNumberLocale(locale);
 
   const scopedFollowUps = isManagementRole(context.role)
     ? followUps

@@ -22,7 +22,7 @@ const ICONS = {
 export default function ActionCenterPage() {
   const user = useCurrentUser();
   const locale = useUIStore((state) => state.locale);
-  const isAr = locale === "ar";
+  // const isAr = locale === "ar";
   const [data, setData] = useState<ActionCenterData | null>(null);
   const [loading, setLoading] = useState(true);
 

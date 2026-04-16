@@ -125,7 +125,6 @@ export async function getDashboardOverview(
 
   const salesFunnelBase = Math.max(1, leads.length);
   const opsFunnelBase = Math.max(1, students.length);
-  const _numberLocale = locale === "ar" ? "ar-EG" : "en-US";
 
   const operations: DashboardOperationItem[] = isOps
     ? [

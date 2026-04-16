@@ -84,9 +84,6 @@ function saveLocalActivities(activities: LeadActivityItem[]): void {
   writeStorage(ACTIVITIES_KEY, sortByDateDesc(activities, (activity) => activity.date));
 }
 
-function _clearLocalActivities(): void {
-  writeStorage(ACTIVITIES_KEY, []);
-}
 
 function asString(value: unknown, fallback = ""): string {
   return typeof value === "string" && value.trim().length > 0 ? value : fallback;
