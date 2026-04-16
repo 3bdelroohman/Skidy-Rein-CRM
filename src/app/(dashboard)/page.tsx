@@ -147,8 +147,7 @@ export default function DashboardPage() {
 
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.2fr_0.8fr]">
           <div className="space-y-6">
-            <TaskCard
-              locale={locale}
+            <TaskCard locale={locale}
               isAr={isAr}
               tasks={overview.followUps}
               title={t(locale, "مهامي اليوم", "My tasks today")}
@@ -173,7 +172,7 @@ export default function DashboardPage() {
 
           <div className="space-y-6">
             <OperationsGrid locale={locale} items={overview.operations} compact />
-            <QuickActionGrid title={t(locale, "الخطوات التالية", "Next steps")} locale={locale} isAr={isAr} actions={overview.quickActions} compact />
+            <QuickActionGrid title={t(locale, "الخطوات التالية", "Next steps")} isAr={isAr} actions={overview.quickActions} compact />
           </div>
         </div>
       </div>
@@ -236,8 +235,7 @@ export default function DashboardPage() {
             )}
           </div>
 
-          <TaskCard
-            locale={locale}
+          <TaskCard locale={locale}
             isAr={isAr}
             tasks={overview.followUps.slice(0, 6)}
             title={t(locale, "مهام اليوم", "Today tasks")}
@@ -263,7 +261,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <QuickActionGrid title={t(locale, "تشغيل سريع", "Fast execution")} locale={locale} isAr={isAr} actions={overview.quickActions} />
+          <QuickActionGrid title={t(locale, "تشغيل سريع", "Fast execution")} isAr={isAr} actions={overview.quickActions} />
 
           <div className="rounded-2xl border border-border bg-card p-5">
             <DashboardSectionTitle title={t(locale, "توصيات تشغيلية", "Operational recommendations")} icon={Target} />
@@ -335,7 +333,7 @@ function OperationsGrid({ locale, items, compact = false }: { locale: "ar" | "en
   );
 }
 
-function QuickActionGrid({ title, locale: _locale, isAr, actions, compact = false }: { title: string; locale: "ar" | "en"; isAr: boolean; actions: DashboardActionItem[]; compact?: boolean }) {
+function QuickActionGrid({ title, isAr, actions, compact = false }: { title: string; isAr: boolean; actions: DashboardActionItem[]; compact?: boolean }) {
   return (
     <div className="rounded-2xl border border-border bg-card p-5">
       <DashboardSectionTitle title={title} icon={Target} />
