@@ -1,0 +1,2 @@
+-- Migration 006: Cleanup old permissive policies
+-- Applied via Supabase SQL Editor

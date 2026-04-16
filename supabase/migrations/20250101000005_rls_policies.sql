@@ -1,0 +1,2 @@
+-- Migration 005: RLS Policies (role-based)
+-- Applied via Supabase SQL Editor

@@ -1,0 +1,2 @@
+-- Migration 007: Audit log triggers on 8 tables
+-- Applied via Supabase SQL Editor
